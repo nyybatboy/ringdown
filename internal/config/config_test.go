@@ -265,7 +265,7 @@ func TestReadmeShowsExample(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The reference is README.md here, docs/reference.md in the agent-phone public layout.
+	// The reference is README.md here, docs/reference.md in the ringdown public layout.
 	readme, err := os.ReadFile("../../docs/reference.md")
 	if os.IsNotExist(err) {
 		readme, err = os.ReadFile("../../README.md")

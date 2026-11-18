@@ -1,6 +1,6 @@
 package server
 
-// agent-phone fork: the loopback smoke test. The install calls its own number; its inbound side
+// ringdown fork: the loopback smoke test. The install calls its own number; its inbound side
 // answers; two agents talk. It passes when both legs end with a transcript that has both sides
 // in it. It needs inbound (the number's webhook on this install) and spends two short legs of
 // call minutes, nothing else.

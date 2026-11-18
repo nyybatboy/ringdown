@@ -1,6 +1,6 @@
 package main
 
-// agent-phone fork: dialout smoke and dialout number.
+// ringdown fork: dialout smoke and dialout number.
 
 import (
 	"context"

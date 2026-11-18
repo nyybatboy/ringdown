@@ -1,6 +1,6 @@
 // Command probe opens one engine session without a phone line, sends the opening cue, optionally
 // plays a callee line (8 kHz mono 16-bit WAV) after the agent's first turn, and prints every event
-// with its time. agent-phone fork: proves an engine's protocol before any call is placed.
+// with its time. ringdown fork: proves an engine's protocol before any call is placed.
 //
 //	probe -config dialout.yaml -engine grok|gemini|<profile> [-callee line.wav] [-out agent.raw] [-trace]
 package main

@@ -54,7 +54,7 @@ type Engine struct {
 	// Language is the callee's language for the transcription (ISO 639-1); "it" when empty.
 	Language string
 
-	// agent-phone fork: the same protocol serves other vendors (xAI Grok Voice). ID names the
+	// ringdown fork: the same protocol serves other vendors (xAI Grok Voice). ID names the
 	// engine in meta.json ("openai" when empty); Voices replaces the built-in voice list;
 	// Transcription is the input transcription setting (OpenAI's when nil; NoTranscription to
 	// send none); TurnDetection replaces semantic_vad when set.

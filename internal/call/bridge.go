@@ -63,7 +63,7 @@ type bridge struct {
 
 	closedAt time.Time // the engine closed the conversation cleanly (ElevenLabs' own end_call)
 
-	// The hang-up guard (agent-phone fork): callee speech after end_call holds the hang-up until
+	// The hang-up guard (ringdown fork): callee speech after end_call holds the hang-up until
 	// its transcript says whether it's a goodbye (hang up) or more conversation (the call goes on).
 	calleeAfterEnd time.Time
 
@@ -523,7 +523,7 @@ func (b *bridge) closingDue(now time.Time) string {
 		}
 		return ""
 	}
-	// agent-phone fork: the callee's last words count too, so a caller still talking isn't cut off.
+	// ringdown fork: the callee's last words count too, so a caller still talking isn't cut off.
 	// An outcome reported while the agent's question is still open (Gemini does this) waits for the
 	// answer, up to EndMax (a live test, 2026-11-16: the line dropped on its question).
 	if b.r.res.Outcome != nil && b.askedLast() && now.Sub(b.outcomeAt) < t.EndMax {

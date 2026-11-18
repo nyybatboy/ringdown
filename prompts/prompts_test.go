@@ -28,7 +28,7 @@ func TestBuiltinSystem(t *testing.T) {
 		Limits:    "Between 7:30 and 9 pm is fine. No deposit.",
 		Context:   "The booking is under Rossi.",
 	}}).System
-	// agent-phone fork: the lean system block (2026-11-16).
+	// ringdown fork: the lean system block (2026-11-16).
 	for _, want := range []string{
 		"You're on a phone call for Mario. It's Friday, October 23, 6:30 PM.\nYou're talking with Joe's Diner. They don't know Mario.\n\n",
 		"What you want to come away with: A table for 4 on Friday at 8 pm.\nYour room to decide (yours to know, not to recite): Between 7:30 and 9 pm is fine. No deposit.\nUseful to know: The booking is under Rossi.\nA way in, if it fits (your own words): Hi, I'd like to book a table.\n\n",
@@ -227,7 +227,7 @@ func TestBuiltinStaysOnTheObjective(t *testing.T) {
 			t.Errorf("built-in prompt mentions %q", w)
 		}
 	}
-	// agent-phone fork: the lean system block (2026-11-16: objectives and general
+	// ringdown fork: the lean system block (2026-11-16: objectives and general
 	// guidance, no script); the same guards, in its words.
 	for _, want := range []string{"while you get what you came for",
 		"Nothing is agreed until they agree.",
@@ -239,7 +239,7 @@ func TestBuiltinStaysOnTheObjective(t *testing.T) {
 	}
 }
 
-// agent-phone fork: the disclosing example prompt loads and puts the disclosure in every opening.
+// ringdown fork: the disclosing example prompt loads and puts the disclosure in every opening.
 func TestDisclosePrompt(t *testing.T) {
 	s, err := Load("../examples/prompt-disclose.tmpl")
 	if err != nil {

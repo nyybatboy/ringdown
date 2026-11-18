@@ -105,7 +105,7 @@ type Outcome struct {
 	Result  string `json:"result"`
 	Summary string `json:"summary"`
 	Details string `json:"details"`
-	// Checked is set when the call engine changed the agent's result (agent-phone fork): why, and
+	// Checked is set when the call engine changed the agent's result (ringdown fork): why, and
 	// what the agent had reported.
 	Checked string `json:"checked,omitempty"`
 }

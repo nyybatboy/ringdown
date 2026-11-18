@@ -1,5 +1,5 @@
 // Package gemini holds the conversation on Google's Gemini Live API (BidiGenerateContent over a
-// server-side WebSocket) behind voice.Engine. agent-phone fork (2026-11-16).
+// server-side WebSocket) behind voice.Engine. ringdown fork (2026-11-16).
 //
 // Audio: the line's 8 kHz PCM goes in as audio/pcm;rate=8000 (Google resamples; SaySo has run
 // this way in production since 2026-03); the agent's 24 kHz PCM comes back and is filtered down

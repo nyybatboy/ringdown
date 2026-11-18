@@ -23,7 +23,7 @@ const (
 	ResultFailed      = "failed"
 	ResultVoicemail   = "voicemail"
 	ResultWrongNumber = "wrong_number"
-	// ResultDoNotCall: they asked not to be called again (agent-phone fork). The server refuses
+	// ResultDoNotCall: they asked not to be called again (ringdown fork). The server refuses
 	// further calls to that number until the owner clears it from the history.
 	ResultDoNotCall = "do_not_call"
 )

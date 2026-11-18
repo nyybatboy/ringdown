@@ -45,7 +45,7 @@ func DefaultTiming() Timing {
 	return Timing{
 		Poll:       2 * time.Second,
 		StreamWait: 60 * time.Second,
-		// agent-phone fork: 4 s, not 1.5 s. On early test calls to a mobile the callee's hello came
+		// ringdown fork: 4 s, not 1.5 s. On early test calls to a mobile the callee's hello came
 		// 1.8 to 3.3 s after the stream started, always after a 1.5 s cue, so the agent started,
 		// was cut off by "Hello?" and restarted. Now a hello cancels the cue and the engine answers
 		// it in its own turn-taking; the cue only breaks a silence.
@@ -55,7 +55,7 @@ func DefaultTiming() Timing {
 		WrapUp:        30 * time.Second,
 		AgentQuiet:    700 * time.Millisecond,
 		EndNoAudio:    3 * time.Second,
-		// agent-phone fork, the hang-up guard: on an early test call the agent called end_call while
+		// ringdown fork, the hang-up guard: on an early test call the agent called end_call while
 		// still asking a question, and the line dropped on the callee mid-conversation.
 		// 3 s since a live test (2026-11-16): an agent that left a message and called end_call at
 		// once hung up before the other side could say "got it".
@@ -101,7 +101,7 @@ type Params struct {
 	RingTimeout time.Duration   // before no-answer
 	Policy      json.RawMessage // the policy decision, stored in meta.json as is
 	// Inbound is set when someone called the install and the call is being answered
-	// (agent-phone fork): no call is created and no tunnel started; the stream comes to Expected.
+	// (ringdown fork): no call is created and no tunnel started; the stream comes to Expected.
 	Inbound *Inbound
 }
 
@@ -160,7 +160,7 @@ type WatchdogAction struct {
 // meta is the call's meta.json.
 type meta struct {
 	CallID        string          `json:"call_id"`
-	Direction     string          `json:"direction,omitempty"` // agent-phone fork: inbound or outbound
+	Direction     string          `json:"direction,omitempty"` // ringdown fork: inbound or outbound
 	Status        string          `json:"status"`
 	To            string          `json:"to"`
 	Label         string          `json:"label,omitempty"`
@@ -343,7 +343,7 @@ func (r *run) run(ctx context.Context) {
 }
 
 // answer runs an incoming call: its TwiML already streams to the expected token, so wait for the
-// stream and hold the conversation (agent-phone fork).
+// stream and hold the conversation (ringdown fork).
 func (r *run) answer(ctx, bg context.Context) {
 	in := r.p.Inbound
 	defer in.Expected.Cancel()

@@ -1,6 +1,6 @@
 package server
 
-// agent-phone fork: inbound calls. Twilio posts an incoming call to /twilio/voice on the standing
+// ringdown fork: inbound calls. Twilio posts an incoming call to /twilio/voice on the standing
 // ingress; the server answers it with TwiML that streams to the call engine, where an agent holds
 // the conversation on the install's standing brief and files the call in the history as inbound.
 // The agent's inbox is that history (list_inbox, get_call); an optional webhook is told after

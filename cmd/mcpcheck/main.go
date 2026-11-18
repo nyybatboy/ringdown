@@ -1,5 +1,5 @@
 // Command mcpcheck drives a running dialout serve over MCP HTTP: list_numbers, place_call to a
-// label, get_call until final, list_inbox. agent-phone fork: verifies the install path end to end.
+// label, get_call until final, list_inbox. ringdown fork: verifies the install path end to end.
 package main
 
 import (

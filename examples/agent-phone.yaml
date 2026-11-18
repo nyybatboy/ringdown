@@ -1,4 +1,4 @@
-# agent-phone: a dialout.yaml for one install of the fork. Gemini 3.8 Live and Grok Voice 3.0 as
+# ringdown: a dialout.yaml for one install of the fork. Gemini 3.8 Live and Grok Voice 3.0 as
 # named profiles, a standing ngrok domain as the ingress, inbound calls answered with a standing
 # brief, and a monthly dollar limit. Secrets come from secrets.env (see secrets.env.example) or
 # the environment. Every other key keeps dialout's default: dialout.example.yaml lists them all.

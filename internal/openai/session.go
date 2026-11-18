@@ -38,7 +38,7 @@ type Session struct {
 	usage          voice.Usage      // running totals over the responses
 	lastError      string           // the last error event, for the closing error
 
-	// agent-phone fork.
+	// ringdown fork.
 	name        string                             // the engine's name, for logs
 	xai         bool                               // xAI's transcript events
 	calleeItem  string                             // xAI: the item of the callee transcript being built
@@ -93,7 +93,7 @@ func (s *Session) Cue(text string, respond bool) error {
 // EndWait is how long End leaves the connection open for the caller's last words to be transcribed.
 var EndWait = 3 * time.Second
 
-// End stops sending and closes the conversation. agent-phone fork: 800 ms of silence lets server
+// End stops sending and closes the conversation. ringdown fork: 800 ms of silence lets server
 // VAD close the caller's turn, so their last words are transcribed before the close (the reader
 // flushes what came); a caller who hung up right after speaking lost their message otherwise.
 func (s *Session) End() error {
@@ -160,7 +160,7 @@ func (s *Session) read() {
 	// read Err right away.
 	defer close(s.events)
 	defer close(s.done)
-	// agent-phone fork: an xAI draft still pending when the connection ends is the callee's last
+	// ringdown fork: an xAI draft still pending when the connection ends is the callee's last
 	// words; emit it unless the session was aborted.
 	defer func() {
 		if !s.aborted() {

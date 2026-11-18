@@ -1,6 +1,6 @@
 package main
 
-// agent-phone fork: dialout check, the live check of a running install.
+// ringdown fork: dialout check, the live check of a running install.
 
 import (
 	"context"
@@ -62,7 +62,7 @@ func cmdCheck(args []string) int {
 		*engine = ""
 	}
 	// With inbound off the server still answers this one call: it comes from its own number,
-	// right after the server placed it (agent-phone fork). The number must point at the install.
+	// right after the server placed it (ringdown fork). The number must point at the install.
 	target := *to
 	if target == "" {
 		target = cfg.Twilio.From

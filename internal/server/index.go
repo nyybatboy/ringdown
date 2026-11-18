@@ -173,7 +173,7 @@ func heardOf(r Record) string {
 }
 
 // DoNotCall reports whether a call to this number ended with the callee asking not to be called
-// again (agent-phone fork).
+// again (ringdown fork).
 func (x *Index) DoNotCall(number string) bool {
 	x.mu.Lock()
 	defer x.mu.Unlock()

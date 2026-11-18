@@ -1,10 +1,10 @@
-# agent-phone
+# ringdown
 
 > Give any AI agent a phone line. A self-hosted Go service: the agent writes a short brief over MCP, a realtime voice model (Gemini Live, Grok Voice, OpenAI Realtime, ElevenLabs, Nova Sonic) places or answers the call through Twilio, and the agent gets back the transcript and an outcome. Bring your own keys. A call policy inside the server (allowlist, spend limit, hours, do-not-call) decides what may be called.
 
 ## Start here
 - [AGENTS.md](AGENTS.md): entry point for an AI agent; install steps with a check for each
-- [skill/agent-phone/SKILL.md](skill/agent-phone/SKILL.md): for an agent placing calls through a running line
+- [skill/ringdown/SKILL.md](skill/ringdown/SKILL.md): for an agent placing calls through a running line
 
 ## Docs
 - [docs/install.md](docs/install.md): full install, server and laptop paths, costs, data, compliance
@@ -12,6 +12,6 @@
 - [docs/reference.md](docs/reference.md): configuration, prompt templates, call policy, engines, CLI
 
 ## Examples
-- [examples/agent-phone.yaml](examples/agent-phone.yaml): a complete line config to start from
+- [examples/ringdown.yaml](examples/ringdown.yaml): a complete line config to start from
 - [examples/dialout.example.yaml](examples/dialout.example.yaml): every configuration key
 - [examples/prompt-disclose.tmpl](examples/prompt-disclose.tmpl): a prompt file that discloses AI and transcription first

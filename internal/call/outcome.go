@@ -8,7 +8,7 @@ import (
 	"github.com/mfbonfigli/dialout/internal/voice"
 )
 
-// agent-phone fork: the outcome check. Gemini 3.8 Live reported success while its own turn was
+// ringdown fork: the outcome check. Gemini 3.8 Live reported success while its own turn was
 // still asking for the yes ("Can we confirm Thursday at 2 p.m.?") on 4 of 4 calls we watched; on
 // a live call the callee never said yes. A success that ends on the agent's question with no yes
 // after it is recorded as partial, and the agent's report is kept in Checked. The calling agent

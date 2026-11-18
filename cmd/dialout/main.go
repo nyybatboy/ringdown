@@ -5,7 +5,7 @@
 //	dialout serve                                       MCP over Streamable HTTP, with a bearer token
 //	dialout mcp                                         MCP over stdio, for a client that starts it
 //	dialout healthcheck                                 probe a running server (for Docker)
-//	dialout smoke                                       loopback smoke test (agent-phone fork)
+//	dialout smoke                                       loopback smoke test (ringdown fork)
 //	dialout number [-point]                             the number's incoming-call webhook
 package main
 

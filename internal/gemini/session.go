@@ -74,7 +74,7 @@ func (s *Session) Cue(text string, respond bool) error {
 // EndWait is how long End leaves the connection open for the caller's last words to be transcribed.
 var EndWait = 3 * time.Second
 
-// End stops sending and closes the conversation. agent-phone fork: Gemini transcribes a caller's
+// End stops sending and closes the conversation. ringdown fork: Gemini transcribes a caller's
 // words only once their turn ends, so a caller who hung up right after speaking lost their message
 // (a live test, 2026-11-16). End sends 800 ms of silence and audioStreamEnd, then waits EndWait
 // for the transcription (the reader flushes what came) before closing.
@@ -141,7 +141,7 @@ func (s *Session) aborted() bool {
 func (s *Session) read() {
 	defer close(s.events)
 	defer close(s.done)
-	// agent-phone fork: words still buffered when the connection ends (a caller who hangs up right
+	// ringdown fork: words still buffered when the connection ends (a caller who hangs up right
 	// after speaking, before turnComplete) go out as transcript lines, unless the session was aborted.
 	defer func() {
 		if !s.aborted() {
@@ -367,7 +367,7 @@ func kindOf(data []byte) string {
 }
 
 // markerRE matches the transcriber's own markers, e.g. "<no speech>" and "{pause}", which aren't
-// words anyone said (agent-phone fork; seen on a live test call, 2026-11-16).
+// words anyone said (ringdown fork; seen on a live test call, 2026-11-16).
 var markerRE = regexp.MustCompile(`<[a-z][a-z _-]{0,28}>|\{[a-z][a-z _-]{0,28}\}`)
 
 func cleanTranscript(t string) string {

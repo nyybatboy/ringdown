@@ -9,7 +9,7 @@ import (
 )
 
 // cmdValidate checks a configuration file without starting anything or calling any vendor
-// (agent-phone fork): the step an installing agent runs before serve, smoke or check. It also
+// (ringdown fork): the step an installing agent runs before serve, smoke or check. It also
 // fails on the example files' placeholder values, which parse fine but can't place a call.
 func cmdValidate(args []string) int {
 	fl := flag.NewFlagSet("validate", flag.ContinueOnError)

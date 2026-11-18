@@ -1,6 +1,6 @@
 package openai
 
-// agent-phone fork: xAI's Grok Voice realtime API speaks a dialect of the OpenAI Realtime
+// ringdown fork: xAI's Grok Voice realtime API speaks a dialect of the OpenAI Realtime
 // protocol. Its session.update keeps voice, instructions and turn_detection at the session's top
 // level, with the audio formats under audio.input / audio.output (docs.x.ai voice-agent page,
 // read 2026-11-16); the callee's transcript comes from grok-transcribe as cumulative

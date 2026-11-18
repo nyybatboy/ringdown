@@ -1,4 +1,4 @@
-# Installing agent-phone
+# Installing ringdown
 
 One install gives one agent a phone line. The install is a single process, `dialout`. It places calls, answers calls, and serves both to the agent over MCP. Each install uses its deployer's own keys and keeps its call records on its own disk.
 
@@ -13,7 +13,7 @@ You need a Linux server with Docker, a public address, ports 80 and 443 free, an
 1. **Twilio credentials for the line.** For a first line, use the account's own SID, a Standard API key and the Auth Token. For each further line, `deploy/line/twilio-line.sh <name> <host> <secrets file>` makes a subaccount with its own key and buys a number in it (about $1.15 a month: get the owner's yes first). The values go straight into the secrets file on the server.
 2. **A folder for the line**, `deploy/lines/<line>/`:
    - `line.env`: the server, the folders, the container and network names, a loopback port, and the hostname.
-   - `dialout.yaml`: owner, number, allowlist, limits, profiles. Start from `examples/agent-phone.yaml`.
+   - `dialout.yaml`: owner, number, allowlist, limits, profiles. Start from `examples/ringdown.yaml`.
    - optional `prompt.tmpl`, and optional `secrets.sh` that prints the secrets file from a keychain.
    - The hostname can be `<line>.<the server's address with dashes>.sslip.io`, which needs no DNS setup. A domain of your own is better: sslip.io is a free service you do not control.
 3. **Install:** `deploy/line/install-line.sh <line>`. It builds the binary, ships it, starts the phone ingress (Caddy, which gets the certificate by itself), starts the line, points the number at it, and runs the live check. It is safe to run again after any change.
@@ -55,7 +55,7 @@ Check your work at the end of this step with `dialout validate -config ~/.config
 
 ```bash
 mkdir -p ~/.config/dialout && cd ~/.config/dialout
-cp <repo>/examples/agent-phone.yaml dialout.yaml
+cp <repo>/examples/ringdown.yaml dialout.yaml
 cp <repo>/examples/secrets.env.example secrets.env && chmod 600 secrets.env
 ```
 
@@ -131,7 +131,7 @@ Check the first live run:
 **Claude Code or any MCP client over HTTP:**
 
 ```bash
-claude mcp add --transport http agent-phone http://127.0.0.1:8080/mcp \
+claude mcp add --transport http ringdown http://127.0.0.1:8080/mcp \
   --header "Authorization: Bearer $DIALOUT_MCP_TOKEN"
 ```
 
@@ -139,7 +139,7 @@ claude mcp add --transport http agent-phone http://127.0.0.1:8080/mcp \
 
 To check the connection without an agent: `go run ./cmd/mcpcheck` (with `DIALOUT_MCP_TOKEN` set) lists the numbers, and `-to <label>` also places a 2-minute test call to that label.
 
-Give the agent the skill in `skill/agent-phone/SKILL.md`. It covers writing a brief, choosing a profile, following a call, reading the inbox, and treating transcripts as data.
+Give the agent the skill in `skill/ringdown/SKILL.md`. It covers writing a brief, choosing a profile, following a call, reading the inbox, and treating transcripts as data.
 
 The agent gets five tools:
 

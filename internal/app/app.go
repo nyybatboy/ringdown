@@ -136,7 +136,7 @@ func loadAWS(opts ...func(*awsconfig.LoadOptions) error) (aws.Config, error) {
 // NewEngine builds the configured default voice engine.
 func NewEngine(cfg *config.Config) (voice.Engine, error) { return NewEngineFrom(cfg.Engine) }
 
-// EngineFor builds the engine for one call from a profile or engine name (agent-phone fork:
+// EngineFor builds the engine for one call from a profile or engine name (ringdown fork:
 // engine per call), with the voice that call uses. Empty: the default engine and voice.
 func (a *App) EngineFor(cfg *config.Config, name string) (voice.Engine, string, error) {
 	if name == "" {
@@ -229,7 +229,7 @@ func (a *App) Recover(ctx context.Context, fix func(callID string, meta []byte) 
 
 // Serve starts the stream endpoint that the tunnel forwards to. Stop it with the returned func.
 // voice, when not nil, answers Twilio's incoming-call webhook at /twilio/voice on the same
-// listener (agent-phone fork: inbound calls).
+// listener (ringdown fork: inbound calls).
 func (a *App) Serve(voice ...http.Handler) (stop func(), err error) {
 	ln, err := net.Listen("tcp", a.Config.Tunnel.Listen)
 	if err != nil {

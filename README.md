@@ -1,4 +1,4 @@
-# agent-phone
+# ringdown
 
 **Give any AI agent a phone line.** Your agent writes a short brief: what it wants to come away with, its private limits, and the facts it may share. A realtime voice model places the call (or answers one) through Twilio, holds a natural conversation, and hands back the transcript and an outcome.
 
@@ -9,13 +9,13 @@
 - **Inbound too.** The line can answer its own number with a standing brief ("take a message") and keep an inbox.
 - **Checks you can run.** `dialout validate` checks a config without calling anything. `dialout check` has a running line call its own number and answer itself, then prints PASS or FAIL.
 
-**If you are an AI agent, start with [AGENTS.md](AGENTS.md).** If you are placing calls through a line someone else installed, read [skill/agent-phone/SKILL.md](skill/agent-phone/SKILL.md).
+**If you are an AI agent, start with [AGENTS.md](AGENTS.md).** If you are placing calls through a line someone else installed, read [skill/ringdown/SKILL.md](skill/ringdown/SKILL.md).
 
 ## Quick start (laptop)
 
 ```bash
 GOTOOLCHAIN=go1.27.0 go build -o ./bin/dialout ./cmd/dialout
-cp examples/agent-phone.yaml dialout.yaml
+cp examples/ringdown.yaml dialout.yaml
 cp examples/secrets.env.example secrets.env && chmod 600 secrets.env   # fill in your keys
 ./bin/dialout validate -config dialout.yaml                             # PASS once no placeholder is left
 ngrok http 8090 --url <your-domain>.ngrok-free.dev                       # in another terminal

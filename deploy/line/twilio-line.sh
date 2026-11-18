@@ -46,7 +46,7 @@ printf %s "$SUB_TOK" | set_secret TWILIO_AUTH_TOKEN
 if ssh "$HOST" "sudo -n grep -q '^TWILIO_API_KEY_SECRET=.' $FILE"; then
   echo "API key: already in $FILE"
 else
-  key="$(tw -u "$SUB_SID:$SUB_TOK" -X POST "$API/Accounts/$SUB_SID/Keys.json" --data-urlencode "FriendlyName=agent-phone $NAME")"
+  key="$(tw -u "$SUB_SID:$SUB_TOK" -X POST "$API/Accounts/$SUB_SID/Keys.json" --data-urlencode "FriendlyName=ringdown $NAME")"
   KEY_SID="$(jq -r .sid <<<"$key")"
   [ -n "$KEY_SID" ] && [ "$KEY_SID" != null ] || { echo "API key not created" >&2; exit 1; }
   printf %s "$KEY_SID" | set_secret TWILIO_API_KEY_SID
@@ -61,7 +61,7 @@ else
   PICK="$(tw -u "$SUB_SID:$SUB_TOK" -G "$API/Accounts/$SUB_SID/AvailablePhoneNumbers/US/Local.json" ${AREA:+-d AreaCode="$AREA"} -d VoiceEnabled=true -d PageSize=1 | jq -r '.available_phone_numbers[0].phone_number // empty')"
   [ -n "$PICK" ] || PICK="$(tw -u "$SUB_SID:$SUB_TOK" -G "$API/Accounts/$SUB_SID/AvailablePhoneNumbers/US/Local.json" -d VoiceEnabled=true -d PageSize=1 | jq -r '.available_phone_numbers[0].phone_number // empty')"
   [ -n "$PICK" ] || { echo "no US local number available" >&2; exit 1; }
-  NUM="$(tw -u "$SUB_SID:$SUB_TOK" -X POST "$API/Accounts/$SUB_SID/IncomingPhoneNumbers.json" --data-urlencode "PhoneNumber=$PICK" --data-urlencode "FriendlyName=agent-phone $NAME" | jq -r .phone_number)"
+  NUM="$(tw -u "$SUB_SID:$SUB_TOK" -X POST "$API/Accounts/$SUB_SID/IncomingPhoneNumbers.json" --data-urlencode "PhoneNumber=$PICK" --data-urlencode "FriendlyName=ringdown $NAME" | jq -r .phone_number)"
   [ -n "$NUM" ] && [ "$NUM" != null ] || { echo "number not bought" >&2; exit 1; }
   echo "number bought: $NUM"
 fi

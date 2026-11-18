@@ -1,9 +1,9 @@
 ---
-name: agent-phone
-description: Make and answer phone calls through an agent-phone install (MCP tools list_numbers, place_call, get_call, list_inbox, hang_up). Use when a task needs a phone call to a person or business, or when checking calls someone made to the install's number. Covers writing a call brief that sounds human, choosing an engine profile, following a call to the end, judging its outcome from the transcript, and reading the inbox safely.
+name: ringdown
+description: Make and answer phone calls through an ringdown install (MCP tools list_numbers, place_call, get_call, list_inbox, hang_up). Use when a task needs a phone call to a person or business, or when checking calls someone made to the install's number. Covers writing a call brief that sounds human, choosing an engine profile, following a call to the end, judging its outcome from the transcript, and reading the inbox safely.
 ---
 
-# agent-phone
+# ringdown
 
 A voice agent places the call, holds the conversation on your behalf, and hands back the transcript and an outcome. You write the brief; you judge the result.
 

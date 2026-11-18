@@ -33,12 +33,12 @@ done
 grep -q "hostname: *$LINE_HOSTNAME" "$L/dialout.yaml" || { echo "dialout.yaml: tunnel.hostname must be $LINE_HOSTNAME (line.env)" >&2; exit 2; }
 GO_DIR="$REPO"; [ -f "$REPO/go.mod" ] || GO_DIR="$REPO/dialout"   # the Go module: the repo root, or dialout/
 TAG="$(git -C "$REPO" rev-parse --short HEAD)$(git -C "$REPO" diff --quiet HEAD -- "$GO_DIR" || echo -dirty)"
-T=/tmp/agent-phone-build-$LINE
+T=/tmp/ringdown-build-$LINE
 
 echo "[$LINE] build $TAG (linux/amd64)"
 mkdir -p "$HERE/build"
 (cd "$GO_DIR" && GOTOOLCHAIN=go1.27.0 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-  go build -trimpath -ldflags "-s -w -X main.version=agent-phone-$TAG" -o "$HERE/build/dialout" ./cmd/dialout)
+  go build -trimpath -ldflags "-s -w -X main.version=ringdown-$TAG" -o "$HERE/build/dialout" ./cmd/dialout)
 
 echo "[$LINE] ship to $HOST"
 ssh "$HOST" "rm -rf $T && mkdir -p $T/ingress"
@@ -73,7 +73,7 @@ ssh "$HOST" "set -e
 
 echo "[$LINE] image + start"
 ssh "$HOST" "set -e
-  cd $T && sudo -n docker build -q -t agent-phone:$TAG . >/dev/null 2>&1
+  cd $T && sudo -n docker build -q -t ringdown:$TAG . >/dev/null 2>&1
   sudo -n docker network inspect $LINE_NET >/dev/null 2>&1 || sudo -n docker network create $LINE_NET >/dev/null
   cd $LINE_DIR && sudo -n env AGENT_PHONE_TAG=$TAG LINE_PROJECT=$LINE_PROJECT LINE_CONTAINER=$LINE_CONTAINER LINE_NET=$LINE_NET \
     LINE_PORT=$LINE_PORT LINE_DIR=$LINE_DIR LINE_SECRETS=$LINE_SECRETS LINE_TZ=${LINE_TZ:-UTC} docker compose -f compose.yaml up -d --remove-orphans 2>&1 | tail -4

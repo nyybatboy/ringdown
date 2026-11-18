@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// agent-phone fork: a profile overrides its engine's settings for one call, and a bare engine name
+// ringdown fork: a profile overrides its engine's settings for one call, and a bare engine name
 // resolves to that engine as configured; a missing key is caught before the call.
 func TestResolve(t *testing.T) {
 	c := &Config{Engine: Engine{Name: "grok",

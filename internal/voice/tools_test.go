@@ -48,7 +48,7 @@ func TestToolSpecs(t *testing.T) {
 	if err := json.Unmarshal([]byte(specs[0].Schema), &s); err != nil {
 		t.Fatal(err)
 	}
-	if s.Properties["summary"].Description != `Sum "up".` || len(s.Properties["result"].Enum) != 6 || // agent-phone fork: + do_not_call
+	if s.Properties["summary"].Description != `Sum "up".` || len(s.Properties["result"].Enum) != 6 || // ringdown fork: + do_not_call
 		strings.Join(s.Required, ",") != "result,summary" {
 		t.Errorf("report_outcome schema = %s", specs[0].Schema)
 	}

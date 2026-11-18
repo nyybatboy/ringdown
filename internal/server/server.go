@@ -48,9 +48,9 @@ type Server struct {
 	ctx     context.Context // the server's lifetime: calls are cancelled with it
 	mu      sync.Mutex
 	active  *active
-	inbound *active // agent-phone fork: an inbound call runs beside an outbound one
+	inbound *active // ringdown fork: an inbound call runs beside an outbound one
 	// selfTestUntil: after a call to the install's own number, its answer is taken even with
-	// inbound off, once, until this time (agent-phone fork: dialout check with inbound off).
+	// inbound off, once, until this time (ringdown fork: dialout check with inbound off).
 	selfTestUntil time.Time
 	wg            sync.WaitGroup
 }
@@ -141,7 +141,7 @@ func (s *Server) MCP() *mcp.Server {
 func (s *Server) HTTPHandler(token string) http.Handler {
 	srv := s.MCP()
 	h := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return srv }, &mcp.StreamableHTTPOptions{Logger: s.Log,
-		// agent-phone fork: no MCP session to lose when the server restarts (an agent's MCP client failed its
+		// ringdown fork: no MCP session to lose when the server restarts (an agent's MCP client failed its
 		// first call after every redeploy). The tools never call back into the client.
 		Stateless: true})
 	mux := http.NewServeMux()
@@ -186,7 +186,7 @@ type listNumbersOut struct {
 	CallsLeftDay   *int `json:"calls_left_today,omitempty" jsonschema:"absent when there is no daily limit"`
 	CallInProgress bool `json:"call_in_progress"`
 
-	// agent-phone fork
+	// ringdown fork
 	Profiles []profileOut `json:"profiles,omitempty" jsonschema:"the engine profiles place_call accepts as engine"`
 	Spend    string       `json:"spend" jsonschema:"estimated spend this calendar month and the limit, if any; at the limit new calls are refused"`
 	Inbound  bool         `json:"inbound" jsonschema:"whether the install answers calls to its number (see list_inbox)"`
@@ -293,7 +293,7 @@ func (s *Server) placeCall(ctx context.Context, _ *mcp.CallToolRequest, in place
 	brief := prompts.Brief{Callee: d.Callee, Kind: d.CalleeKind, Label: d.Label, Opening: in.Opening,
 		Objective: in.Objective, Limits: in.Limits, Context: in.Context}
 	cc := s.App.CallConfig(cfg, nil, nil)
-	// agent-phone fork: the engine is chosen per call.
+	// ringdown fork: the engine is chosen per call.
 	if in.Engine != "" {
 		eng, v, err := s.App.EngineFor(cfg, in.Engine)
 		if err != nil {

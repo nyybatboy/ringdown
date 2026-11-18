@@ -8,7 +8,7 @@ import (
 	"github.com/mfbonfigli/dialout/internal/voice"
 )
 
-// agent-phone fork: the pass rule shared by dialout smoke and dialout check.
+// ringdown fork: the pass rule shared by dialout smoke and dialout check.
 func TestCheckLegs(t *testing.T) {
 	both := []call.Line{{Speaker: voice.SpeakerAgent, Text: "Hello."}, {Speaker: voice.SpeakerCallee, Text: "Hi."}}
 	good := Record{CallID: "a", Answered: true, Status: "completed", Transcript: both}

@@ -414,7 +414,7 @@ func TestCallEndToEnd(t *testing.T) {
 		return name == "textInput" && b["content"] == builtinCues.Opening
 	})
 	h.sonic.say("a1", 3200, "Ciao, sono l'assistente di Marco.")
-	// agent-phone fork: the callee answers; a success nobody answered is recorded as partial.
+	// ringdown fork: the callee answers; a success nobody answered is recorded as partial.
 	h.sonic.hear("c1", "Arrivo alle 20.")
 	h.sonic.tool("t1", "report_outcome", `{"result":"success","summary":"Arriva alle 20.","details":"verso le 20"}`)
 	h.sonic.tool("t2", "end_call", `{"reason":"fatto"}`)
@@ -937,7 +937,7 @@ func TestSonicEndCallWaitsForTheGoodbye(t *testing.T) {
 	}
 }
 
-// agent-phone fork, the hang-up guard. an early test call: the agent called end_call while its own
+// ringdown fork, the hang-up guard. an early test call: the agent called end_call while its own
 // turn still asked a question, and the line dropped on the callee mid-sentence. Callee speech
 // that isn't a goodbye cancels the end and cues the agent; a goodbye lets the call end.
 func TestHangUpGuard(t *testing.T) {

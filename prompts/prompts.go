@@ -35,8 +35,8 @@ const (
 	BlockCueOpening       = "cue.opening"
 	BlockCueWrapUp        = "cue.wrap_up"
 	BlockCueFinal         = "cue.final"
-	BlockCueNotOver       = "cue.not_over" // agent-phone fork: the hang-up guard
-	BlockCueAnswer        = "cue.answer"   // agent-phone fork: an inbound call was just picked up
+	BlockCueNotOver       = "cue.not_over" // ringdown fork: the hang-up guard
+	BlockCueAnswer        = "cue.answer"   // ringdown fork: an inbound call was just picked up
 	BlockNextEndCall      = "tool.next.end_call"
 	BlockNextGoodbye      = "tool.next.goodbye"
 	BlockReportOutcome    = "tool.report_outcome"
@@ -103,7 +103,7 @@ type Brief struct {
 	Objective string // why the agent calls: what to obtain or say, the preferred option included
 	Limits    string // what is fine: margins, ceilings, defaults, flexibility; never said; optional
 	Context   string // facts the agent knows and may share; optional
-	Inbound   bool   // agent-phone fork: they called and the agent answered
+	Inbound   bool   // ringdown fork: they called and the agent answered
 }
 
 // Vars are the variables every block sees.
@@ -129,8 +129,8 @@ type Cues struct {
 	Opening string // the callee stays silent after answering
 	WrapUp  string // 30 seconds before the time limit
 	Final   string // at the time limit
-	NotOver string // agent-phone fork: the agent ended the call but the callee kept talking
-	Answer  string // agent-phone fork: an inbound call was just picked up
+	NotOver string // ringdown fork: the agent ended the call but the callee kept talking
+	Answer  string // ringdown fork: an inbound call was just picked up
 }
 
 // Question is one of the watchdog's yes/no questions.

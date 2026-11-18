@@ -852,9 +852,9 @@ to `dialout.yaml` to keep the secrets next to it.
 | `dialout mcp` | Serves MCP over stdio, for a client that starts it |
 | `dialout serve` | Serves MCP over HTTP at `server.mcp_listen` (default `:8080`), path `/mcp` |
 | `dialout healthcheck` | Exits 0 if a running server answers (the image's health check) |
-| `dialout check` | Live check of a running install with no downtime: calls its own number over its own MCP endpoint, answers itself, both transcripts must come back (agent-phone fork) |
-| `dialout smoke` | The same loopback test for an install that isn't running yet: serves the port itself and puts the webhook back (agent-phone fork) |
-| `dialout number [-point]` | Shows the number's incoming-call webhook, or points it at this install (agent-phone fork) |
+| `dialout check` | Live check of a running install with no downtime: calls its own number over its own MCP endpoint, answers itself, both transcripts must come back (ringdown fork) |
+| `dialout smoke` | The same loopback test for an install that isn't running yet: serves the port itself and puts the webhook back (ringdown fork) |
+| `dialout number [-point]` | Shows the number's incoming-call webhook, or points it at this install (ringdown fork) |
 | `dialout version` | Prints the version |
 
 ```bash

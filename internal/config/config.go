@@ -44,10 +44,10 @@ type Config struct {
 	Server      Server   `yaml:"server"`
 	Watchdog    Watchdog `yaml:"watchdog"`
 	Policy      Policy   `yaml:"policy"`
-	// Profiles are named engine choices a call can pick (agent-phone fork): hifi, standard,
+	// Profiles are named engine choices a call can pick (ringdown fork): hifi, standard,
 	// internal, or any name. A profile overrides the engine's settings for that call only.
 	Profiles map[string]Profile `yaml:"profiles"`
-	// Inbound answers calls to twilio.from with a standing brief (agent-phone fork).
+	// Inbound answers calls to twilio.from with a standing brief (ringdown fork).
 	Inbound Inbound `yaml:"inbound"`
 
 	Path     string         `yaml:"-"` // the file it was read from
@@ -67,7 +67,7 @@ type Inbound struct {
 	// PerDay caps the calls answered in 24 hours; 0: no cap.
 	PerDay int `yaml:"per_day"`
 	// SpendShare: inbound calls are refused once the month's spend reaches this share of the limit,
-	// so callers can't use up the budget the owner's own calls need; 0.8 when 0 (agent-phone fork,
+	// so callers can't use up the budget the owner's own calls need; 0.8 when 0 (ringdown fork,
 	// from Dev's review).
 	SpendShare float64 `yaml:"spend_share"`
 	// NotifyURL gets a POST with the call's record (JSON) after every inbound call; optional.
@@ -81,7 +81,7 @@ type Twilio struct {
 	APIKeySecret string `yaml:"api_key_secret"`
 	AuthToken    string `yaml:"auth_token"` // only to check X-Twilio-Signature
 	From         string `yaml:"from"`       // caller ID: verified, or a number on the account
-	// USDPerMinute is the carrier's rate, for the spend estimate (agent-phone fork); 0.014 (Twilio
+	// USDPerMinute is the carrier's rate, for the spend estimate (ringdown fork); 0.014 (Twilio
 	// US, verified 2026-08-10) when 0.
 	USDPerMinute float64 `yaml:"usd_per_minute"`
 }
@@ -96,7 +96,7 @@ type Engine struct {
 	Gemini     Gemini     `yaml:"gemini"`
 }
 
-// Engines are the engine names a call may choose (agent-phone fork: engine per call).
+// Engines are the engine names a call may choose (ringdown fork: engine per call).
 var Engines = []string{"sonic", "elevenlabs", "openai", "grok", "gemini"}
 
 // Profile is one named engine choice: the engine plus the settings it overrides for a call.
@@ -113,7 +113,7 @@ type Profile struct {
 }
 
 // EngineRates are the engines' published per-minute rates in US dollars, for the spend estimate
-// (agent-phone fork). Read from the vendors' pricing pages on 2026-11-16: Gemini 3.8 Live about
+// (ringdown fork). Read from the vendors' pricing pages on 2026-11-16: Gemini 3.8 Live about
 // $0.014-0.017 (the higher end here), Grok Voice 3.0 $0.08. Others: set usd_per_minute.
 var EngineRates = map[string]float64{"gemini": 0.017, "grok": 0.08}
 
@@ -236,7 +236,7 @@ type Prompt struct {
 type Tunnel struct {
 	Hostname string `yaml:"hostname"` // empty: a quick tunnel per call
 	// Standing: the hostname already reaches Listen and stays up (ngrok, a reverse proxy, an
-	// always-on cloudflared): no cloudflared per call and no token (agent-phone fork). Inbound
+	// always-on cloudflared): no cloudflared per call and no token (ringdown fork). Inbound
 	// calls need it.
 	Standing    bool   `yaml:"standing"`
 	Token       string `yaml:"token"`       // the named tunnel's token, with a hostname
@@ -301,7 +301,7 @@ type Limits struct {
 	PerDay       int `yaml:"per_day"`            // 0: no limit
 	PerNumberDay int `yaml:"per_number_per_day"` // open mode, unlisted numbers; 0: no limit
 	// SpendPerMonth is the dollar limit for a calendar month, estimated from talk minutes times
-	// the rates (agent-phone fork). It refuses new calls, in and out, and never cuts a live one.
+	// the rates (ringdown fork). It refuses new calls, in and out, and never cuts a live one.
 	// 0: no limit.
 	SpendPerMonth  float64 `yaml:"spend_per_month_usd"`
 	CalleeChars    int     `yaml:"callee_chars"`
@@ -312,7 +312,7 @@ type Limits struct {
 }
 
 // MaxMinutes is the longest call, outbound or inbound: a fixed ceiling against runaway calls (hold
-// music, two agents that never hang up), not an install setting (agent-phone fork, 2026-11-18). An
+// music, two agents that never hang up), not an install setting (ringdown fork, 2026-11-18). An
 // engine whose session is shorter ends the call sooner: see the README's engine limits.
 const MaxMinutes = 120
 

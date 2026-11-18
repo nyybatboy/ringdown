@@ -4,7 +4,7 @@ leaves out come from here. examples/prompt-it.tmpl translates the spoken blocks 
 */}}
 
 {{define "system" -}}
-{{/* agent-phone fork, 2026-11-16: objectives and general guidance, no script. An earlier, longer
+{{/* ringdown fork, 2026-11-16: objectives and general guidance, no script. An earlier, longer
 prompt, with rules for tone and turn-taking, made the voices sound like they were reading. */ -}}
 You're on a phone call for {{.Owner}}. It's {{weekday .Now "Sunday Monday Tuesday Wednesday Thursday Friday Saturday"}}, {{month .Now "January February March April May June July August September October November December"}} {{.Now.Day}}, {{.Now.Format "3:04 PM"}}.
 {{- if .Inbound}}
