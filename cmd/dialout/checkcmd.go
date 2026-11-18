@@ -61,9 +61,8 @@ func cmdCheck(args []string) int {
 	if _, ok := cfg.Profiles[*engine]; !ok && *engine == "internal" {
 		*engine = ""
 	}
-	if !cfg.Inbound.Enabled {
-		return fail("inbound.enabled is off, so nothing would answer the install's own number. Use dialout smoke instead.")
-	}
+	// With inbound off the server still answers this one call: it comes from its own number,
+	// right after the server placed it (agent-phone fork). The number must point at the install.
 	target := *to
 	if target == "" {
 		target = cfg.Twilio.From

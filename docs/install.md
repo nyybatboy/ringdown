@@ -119,7 +119,7 @@ The install calls its own number and answers itself. It passes when both legs en
 
 The test points the number at the install for its duration and puts the old webhook back afterwards. Run it after every change. Stop `dialout serve` first, because the smoke test serves the same port, so it is a host step with a short downtime.
 
-To check a running install without stopping anything, use `dialout check`. It talks to the running server over its own MCP endpoint, places a call to the install's own number, and the same server answers. It takes no port and moves no webhook, and it passes on the same rule as the smoke test. From the agent's side, `place_call` to the `Self` label does the same thing.
+To check a running install without stopping anything, use `dialout check`. It talks to the running server over its own MCP endpoint, places a call to the install's own number, and the same server answers. It takes no port and moves no webhook, and it passes on the same rule as the smoke test. It works with inbound off: the server answers only that one call, from its own number, right after placing it. The number must already point at the install (`dialout number -point`). From the agent's side, `place_call` to the `Self` label does the same thing.
 
 Check the first live run:
 - `smoke: PASS in 23s`

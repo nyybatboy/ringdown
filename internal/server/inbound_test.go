@@ -84,6 +84,31 @@ func TestInboundOff(t *testing.T) {
 	}
 }
 
+// With inbound off, the install answers only its own test call: from its own number, once,
+// within two minutes of placing it.
+func TestSelfTestWithInboundOff(t *testing.T) {
+	h := newHarnessWith(t, testConfig+"tunnel: {hostname: calls.example.com, token: x}\n")
+	h.s.App.Streams = &call.Streams{}
+	if w := post(t, h, callForm("CA1", "+353850000000"), true); !strings.Contains(w.Body.String(), "<Reject") {
+		t.Fatalf("own number, not armed: %s", w.Body)
+	}
+	h.s.mu.Lock()
+	h.s.selfTestUntil = time.Now().Add(time.Minute)
+	h.s.mu.Unlock()
+	if w := post(t, h, callForm("CA2", "+15550001111"), true); !strings.Contains(w.Body.String(), "<Reject") {
+		t.Fatalf("other number while armed: %s", w.Body)
+	}
+	if w := post(t, h, callForm("CA3", "+353 85 000 0000"), true); !strings.Contains(w.Body.String(), "<Stream") {
+		t.Fatalf("own number, armed: %s", w.Body)
+	}
+	h.s.mu.Lock()
+	armed := !h.s.selfTestUntil.IsZero()
+	h.s.mu.Unlock()
+	if armed {
+		t.Error("the self test stays armed after its call")
+	}
+}
+
 func TestSpendLimit(t *testing.T) {
 	h := newHarnessWith(t, strings.Replace(testConfig, "limits: {per_hour: 2}", "limits: {per_hour: 2, spend_per_month_usd: 0.01}", 1)+
 		"engine: {name: gemini, gemini: {api_key: k}}\n")

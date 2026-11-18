@@ -67,8 +67,6 @@ func (s *Server) VoiceHandler() http.Handler {
 func (s *Server) answer(cfg *config.Config, sid, from, account string) (twiml, why string) {
 	in := cfg.Inbound
 	switch {
-	case !in.Enabled:
-		return "", "inbound is off"
 	case sid == "" || account != cfg.Twilio.AccountSID:
 		return "", "not a call on this account"
 	}
@@ -85,6 +83,19 @@ func (s *Server) answer(cfg *config.Config, sid, from, account string) (twiml, w
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	maxDur := config.MaxMinutes * time.Minute
+	if !in.Enabled {
+		// With inbound off, only the install's own test call is answered: once, from its own
+		// number, within two minutes of placing it (caller ID alone could be faked).
+		if onlyDigits(from) != onlyDigits(cfg.Twilio.From) || !now.Before(s.selfTestUntil) {
+			return "", "inbound is off"
+		}
+		s.selfTestUntil = time.Time{}
+		maxDur = 2 * time.Minute
+		if in.Objective == "" {
+			in.Objective = "Find out who's calling and what they need, and take a message for " + cfg.Owner + "."
+		}
+	}
 	if s.inbound != nil {
 		return "", "already on an inbound call"
 	}
@@ -120,7 +131,6 @@ func (s *Server) answer(cfg *config.Config, sid, from, account string) (twiml, w
 	if err != nil {
 		return "", err.Error()
 	}
-	maxDur := config.MaxMinutes * time.Minute
 	exp := s.App.Streams.Expect(token, cfg.Tunnel.Hostname, now.Add(cc.Timing.StreamWait+time.Minute))
 	rec := Record{CallID: id, Direction: "inbound", Status: "in-progress", From: from, To: strings.ReplaceAll(cfg.Twilio.From, " ", ""), Label: label, Objective: in.Objective, Engine: engine, Created: now.UTC(), Answered: true}
 	if err := s.Index.Add(rec); err != nil {
@@ -233,4 +243,14 @@ func spendLine(spent, limit float64) string {
 		return fmt.Sprintf("$%.2f this month, no limit", spent)
 	}
 	return fmt.Sprintf("$%.2f of $%.2f this month", spent, limit)
+}
+
+// onlyDigits keeps a phone number's digits, to compare numbers written differently.
+func onlyDigits(n string) string {
+	return strings.Map(func(r rune) rune {
+		if r >= '0' && r <= '9' {
+			return r
+		}
+		return -1
+	}, n)
 }

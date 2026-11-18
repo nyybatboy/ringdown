@@ -49,7 +49,10 @@ type Server struct {
 	mu      sync.Mutex
 	active  *active
 	inbound *active // agent-phone fork: an inbound call runs beside an outbound one
-	wg      sync.WaitGroup
+	// selfTestUntil: after a call to the install's own number, its answer is taken even with
+	// inbound off, once, until this time (agent-phone fork: dialout check with inbound off).
+	selfTestUntil time.Time
+	wg            sync.WaitGroup
 }
 
 type active struct {
@@ -283,6 +286,9 @@ func (s *Server) placeCall(ctx context.Context, _ *mcp.CallToolRequest, in place
 	if s.Index.DoNotCall(d.Number) {
 		s.Log.Warn("call refused", "reason", "do_not_call", "to", d.Number)
 		return nil, placeCallOut{}, fmt.Errorf("refused (do_not_call): %s asked not to be called again; the owner can clear it", d.Number)
+	}
+	if onlyDigits(d.Number) == onlyDigits(cfg.Twilio.From) {
+		s.selfTestUntil = now.Add(2 * time.Minute)
 	}
 	brief := prompts.Brief{Callee: d.Callee, Kind: d.CalleeKind, Label: d.Label, Opening: in.Opening,
 		Objective: in.Objective, Limits: in.Limits, Context: in.Context}
