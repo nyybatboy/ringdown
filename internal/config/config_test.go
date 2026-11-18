@@ -64,7 +64,7 @@ func TestLoad(t *testing.T) {
 	}
 	// Defaults, and relative paths from the file's folder.
 	if c.Engine.Sonic.Voice != "tiffany" || c.Engine.Sonic.Region != "eu-north-1" || c.Tunnel.Listen != "127.0.0.1:8090" ||
-		c.Storage.SegmentSeconds != 60 || c.Server.MCPListen != ":8080" || c.Engine.Language != "en" {
+		c.Storage.SegmentSeconds != 60 || c.Server.MCPListen != "127.0.0.1:8080" || c.Engine.Language != "en" {
 		t.Errorf("defaults: %+v", c)
 	}
 	if c.Storage.Spool != filepath.Join(dir, "data", "spool") || !strings.HasSuffix(c.Storage.Index, "calls.json") ||

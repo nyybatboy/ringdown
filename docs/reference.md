@@ -1,3 +1,5 @@
+> **Upstream reference.** This is the README of [dialout](https://github.com/mfbonfigli/dialout), kept for its configuration, prompt and policy reference. Where it describes a cloudflared tunnel per call, this fork runs a standing address instead (`tunnel.standing: true`); where it differs from `docs/install.md` or `AGENTS.md`, those win.
+
 # Dialout MCP
 
 
@@ -459,7 +461,7 @@ storage:
   # index: /data/calls.json            # the server's call history
 
 server:                                # dialout serve only
-  mcp_listen: ":8080"                  # MCP over Streamable HTTP, path /mcp
+  mcp_listen: 127.0.0.1:8080           # MCP over Streamable HTTP, path /mcp; 0.0.0.0:8080 to serve other hosts
   mcp_token: ${DIALOUT_MCP_TOKEN}      # at least 32 characters: openssl rand -hex 32
 
 watchdog:                              # a safety net: hangs up on a voicemail, an automated menu or a hostile callee

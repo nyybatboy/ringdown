@@ -8,6 +8,10 @@ You are an AI agent reading this repository. It gives an agent a phone line: a v
 - **You are placing or reading calls through a running line** (you already have an MCP endpoint and a bearer token): read `skill/agent-phone/SKILL.md` and stop there. It is written for you.
 - **You are changing the code:** `docs/reference.md` (configuration, prompt templates, call policy, engines), then the tests: `go test -race ./...`.
 
+## Names
+
+The repository is a fork of [dialout](https://github.com/mfbonfigli/dialout). The binary and CLI are `dialout`; the Go module path is still upstream's (`github.com/mfbonfigli/dialout`). The repository name is this project's own.
+
 ## What it is, in one paragraph
 
 One Go binary, `dialout`, per line. It talks to Twilio for the phone network, to a realtime speech-to-speech engine for the voice (Gemini Live, Grok Voice, OpenAI Realtime, ElevenLabs Agents, Amazon Nova Sonic), and to your agent over MCP (Streamable HTTP or stdio). Engines are chosen per call through named profiles (for example `hifi`, `standard`, `internal`). The person running the line brings every key; nothing is hosted for you. A call policy enforced inside the server (allowlist, countries, number types, hours, rate limits, monthly spend limit, do-not-call memory) decides what may be called. The calling agent can only ask.
@@ -18,14 +22,13 @@ Every step ends with a check. Do not go to the next step until the check passes.
 
 | # | Step | Command | It passed when |
 |---|---|---|---|
-| 1 | Build | `go build -o ./bin/dialout ./cmd/dialout` (Go 1.21+; the toolchain in `go.mod` downloads by itself) | `./bin/dialout version` prints a version |
-| 2 | Secrets | Copy `examples/secrets.env.example` to `secrets.env` next to your config, `chmod 600`, fill in the Twilio values, the engine keys you use, and `DIALOUT_MCP_TOKEN` (`openssl rand -hex 32`) | the file exists and is mode 600; never print its contents |
-| 3 | Config | Copy `examples/agent-phone.yaml` to `dialout.yaml`; set `owner`, `twilio.from`, `tunnel.hostname`, the allowlist (keep a `Self` entry with the line's own number), `inbound.objective`, `policy.limits.spend_per_month_usd` | `./bin/dialout validate -config dialout.yaml` prints `PASS` (exit 0). It calls no vendor and starts nothing |
-| 4 | Public address | Twilio must reach the line over HTTPS. On a server with a public IP: `deploy/line/install-line.sh` does steps 4 to 7 for you (see `docs/install.md`, "On a server"). On a laptop: `ngrok http 8090 --url <your-domain>.ngrok-free.dev` | `curl -s -o /dev/null -w '%{http_code}' https://<hostname>/healthz` prints `204` once step 5 is running |
-| 5 | Run | `./bin/dialout serve -config dialout.yaml` | the log shows the MCP and stream listeners; `./bin/dialout healthcheck` exits 0 |
-| 6 | Inbound (optional) | `./bin/dialout number -config dialout.yaml -point` | `./bin/dialout number -config dialout.yaml` shows `https://<hostname>/twilio/voice` |
-| 7 | Live check | `./bin/dialout check -config dialout.yaml` (the line calls its own number and answers itself; about 30 seconds and two short call legs) | it prints `check: PASS` and both transcripts |
-| 8 | Connect the agent | MCP over HTTP at `http://<host>:8080/mcp`, header `Authorization: Bearer <DIALOUT_MCP_TOKEN>`. For Claude Code: `claude mcp add --transport http agent-phone http://127.0.0.1:8080/mcp --header "Authorization: Bearer $DIALOUT_MCP_TOKEN"` | the agent's `list_numbers` call returns the allowlist and profiles |
+| 1 | Build | `GOTOOLCHAIN=go1.27.0 go build -o ./bin/dialout ./cmd/dialout`. Any Go 1.21+ works: it downloads Go 1.27 from the Go proxy the first time | `./bin/dialout help` prints the command list |
+| 2 | Secrets | `cp examples/secrets.env.example secrets.env && chmod 600 secrets.env`. Replace every `replace-me` and every `AC000…`/`SK000…`: `TWILIO_ACCOUNT_SID`, `TWILIO_API_KEY_SID`, `TWILIO_API_KEY_SECRET`, `TWILIO_AUTH_TOKEN` (Twilio Console), `GEMINI_API_KEY`, `XAI_API_KEY`, and `DIALOUT_MCP_TOKEN` from `openssl rand -hex 32` | the file is mode 600. Never print it |
+| 3 | Config | `cp examples/agent-phone.yaml dialout.yaml`. Every person, number and hostname in it is fictional: set `owner`, `twilio.from` (your Twilio number), `tunnel.hostname`, the allowlist (keep `Self` = your own number), `policy.limits.spend_per_month_usd`. Set `DIALOUT_DATA` to choose where call records go (default `~/.dialout`) | `./bin/dialout validate -config dialout.yaml` prints `PASS` (exit 0). It calls no vendor, and it fails while any example placeholder remains |
+| 4 | Public address and run | Twilio must reach the line over HTTPS. **Server with a public IP:** `deploy/line/install-line.sh` does steps 4 to 7 (see `docs/install.md`, "On a server"). **Laptop:** start `ngrok http 8090 --url <your-domain>.ngrok-free.dev` (needs an ngrok account and its free dev domain), then `./bin/dialout serve -config dialout.yaml` | `./bin/dialout healthcheck` exits 0, and `curl -s -o /dev/null -w '%{http_code}' https://<hostname>/healthz` prints `204` |
+| 5 | Inbound (optional, off in the example) | Set `inbound.enabled: true` and `inbound.objective`, restart serve, then `./bin/dialout number -config dialout.yaml -point`. Once on, anyone who calls the number talks to a paid voice model (capped by `inbound.per_day`) | `./bin/dialout number -config dialout.yaml` shows `https://<hostname>/twilio/voice` |
+| 6 | Live check: **spends money, get your principal's yes first** | `./bin/dialout check -config dialout.yaml`: the line calls its own number and answers itself (about 30 seconds, two short call legs, a few cents) | it prints `check: PASS` and both transcripts |
+| 7 | Connect the agent | MCP over HTTP at `http://127.0.0.1:8080/mcp`, header `Authorization: Bearer <DIALOUT_MCP_TOKEN>`. For Claude Code: `claude mcp add --transport http agent-phone http://127.0.0.1:8080/mcp --header "Authorization: Bearer $DIALOUT_MCP_TOKEN"` (this edits the agent's own config: ask first). Without a client: `set -a; . ./secrets.env; set +a; GOTOOLCHAIN=go1.27.0 go run ./cmd/mcpcheck` | `mcpcheck` prints the spend line and the profile count; an agent's `list_numbers` returns the allowlist and profiles |
 
 Then give the calling agent `skill/agent-phone/SKILL.md`.
 
@@ -44,7 +47,9 @@ Then give the calling agent `skill/agent-phone/SKILL.md`.
 - **No phone-menu key presses (DTMF) yet.** At an automated menu the agent ends the call and reports it.
 - **Every code the server returns** (policy refusals, call statuses, end reasons, outcomes) and what to do about each: `docs/errors.md`.
 - **Costs:** a US number is about $1.15 a month on Twilio; US calls about $0.014 a minute on Twilio plus the engine's rate (`docs/install.md`, "What you need"). `list_numbers` shows the month's estimated spend.
-- **Disclosure and recording law are the deployer's.** The built-in prompt does not announce that the caller is an AI; it says it is an assistant if asked. `examples/prompt-disclose.tmpl` is a prompt file that discloses in the first sentence of every call. Choose deliberately; see `docs/install.md`, "Compliance".
+- **Network exposure:** MCP listens on `127.0.0.1:8080` by default; the bearer token is its only guard if you open it wider. The stream port (`tunnel.listen`, 8090) is the one Twilio reaches through your public address.
+- **`docs/reference.md` is upstream's README.** Its tunnel sections describe a cloudflared tunnel per call; this fork runs a standing address instead (`tunnel.standing: true`, ngrok on a laptop, Caddy on a server). Where the two differ, `docs/install.md` wins.
+- **Disclosure and recording law are the deployer's.** Get your principal's choice before the first call to anyone outside your own side. The built-in prompt does not announce that the caller is an AI; it says it is an assistant if asked. `examples/prompt-disclose.tmpl` is a prompt file that discloses in the first sentence of every call. Choose deliberately; see `docs/install.md`, "Compliance".
 
 ## Where things are
 

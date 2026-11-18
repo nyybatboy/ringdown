@@ -46,7 +46,7 @@ The steps below are the laptop path. On a server, use "On a server" above.
 
 ```bash
 cd <repo>
-GOTOOLCHAIN=go1.27.0 go build -o ~/bin/dialout ./cmd/dialout
+GOTOOLCHAIN=go1.27.0 go build -o ~/bin/dialout ./cmd/dialout   # any Go 1.21+; it fetches Go 1.27 the first time
 ```
 
 ## 2. Configure
@@ -79,7 +79,7 @@ Settings worth knowing:
 |---|---|
 | `policy.enabled` | External calling on or off. Off refuses every outbound call |
 | `policy.mode: allowlist` | Only listed numbers can be called. `open` allows any number in the listed countries and number types |
-| `inbound.enabled` | Whether the install answers calls to its number |
+| `inbound.enabled` | Whether the install answers calls to its number. Off in the example: once on, anyone who calls talks to a paid voice model, up to `inbound.per_day` calls |
 | `storage.enabled`, `storage.record_audio` | Keep transcripts, and audio too. Check the recording laws where you and the people you call are |
 | `policy.limits.spend_per_month_usd` | Estimated from talk minutes times the carrier's and engine's rates. At the limit, new calls in and out are refused. A live call is never cut |
 | `profiles.<name>.usd_per_minute` | The rate for an engine without a built-in one. With a spend limit set, every profile needs a rate |
@@ -99,7 +99,7 @@ dialout serve -config ~/.config/dialout/dialout.yaml
 ```
 
 The server listens in two places:
-- MCP over HTTP on `server.mcp_listen` (`:8080`) at `/mcp`, behind the bearer token.
+- MCP over HTTP on `server.mcp_listen` (`127.0.0.1:8080` by default) at `/mcp`, behind the bearer token. Open it wider (`0.0.0.0:8080`) only when another host or container must reach it.
 - Twilio's media streams and incoming-call webhook on `tunnel.listen` (`127.0.0.1:8090`), which ngrok forwards to.
 
 ## 5. Point the number at the install (inbound)

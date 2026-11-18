@@ -323,7 +323,7 @@ func defaults() Config {
 			ElevenLabs: ElevenLabs{VoiceGender: "female"}},
 		Tunnel:  Tunnel{Listen: "127.0.0.1:8090"},
 		Storage: Storage{Enabled: true, SegmentSeconds: 60},
-		Server:  Server{MCPListen: ":8080"},
+		Server:  Server{MCPListen: "127.0.0.1:8080"},
 		Inbound: Inbound{PerDay: 20},
 		Watchdog: Watchdog{BaseURL: "https://openrouter.ai/api", Model: "openai/gpt-6-luna-decisions", Timeout: 3 * time.Second,
 			CheckEvery: 4, Thresholds: WatchdogThresholds{HangUp: 0.9}},

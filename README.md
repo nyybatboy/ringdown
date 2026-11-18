@@ -14,20 +14,20 @@
 ## Quick start (laptop)
 
 ```bash
-go build -o ./bin/dialout ./cmd/dialout
+GOTOOLCHAIN=go1.27.0 go build -o ./bin/dialout ./cmd/dialout
 cp examples/agent-phone.yaml dialout.yaml
 cp examples/secrets.env.example secrets.env && chmod 600 secrets.env   # fill in your keys
-./bin/dialout validate -config dialout.yaml                             # PASS before going on
+./bin/dialout validate -config dialout.yaml                             # PASS once no placeholder is left
 ngrok http 8090 --url <your-domain>.ngrok-free.dev                       # in another terminal
 ./bin/dialout serve -config dialout.yaml
-./bin/dialout check -config dialout.yaml                                 # the line calls itself
+./bin/dialout check -config dialout.yaml                                 # the line calls itself (a few cents)
 ```
 
 On a server with a public address, `deploy/line/install-line.sh <line>` does it in one command, with no tunnel: see [docs/install.md](docs/install.md).
 
 ## Status
 
-Early. In daily use on two lines since November 2026. Known limits:
+Early: a preview. Known limits:
 - Gemini Live sessions end at about 10 minutes, which ends the call; use a Grok profile for long calls. The hard ceiling for any call is 2 hours.
 - It can't press keys in phone menus (DTMF) yet.
 - One outbound and one inbound call at a time per line.
