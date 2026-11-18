@@ -1,0 +1,773 @@
+// Package config reads dialout.yaml: every setting but the secrets, which the file references as
+// ${VAR} and which come from the environment or from a KEY=VALUE secrets file.
+//
+// Decoding is strict: an unknown key or a wrong type is an error, so a typo can't be silently
+// ignored. Load checks everything a call needs, the prompt file included, so a mistake stops the
+// command at start-up instead of failing a call.
+package config
+
+import (
+	"bytes"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"reflect"
+	"slices"
+	"strings"
+	"time"
+
+	"go.yaml.in/yaml/v3"
+
+	"github.com/mfbonfigli/dialout/internal/policy"
+	"github.com/mfbonfigli/dialout/prompts"
+)
+
+// Env is the variable that names the configuration file when -config doesn't.
+const Env = "DIALOUT_CONFIG"
+
+// DataEnv names the folder for the spool, the stored calls and the history when the file doesn't
+// set them; ~/.dialout when unset. The container sets it to /data.
+const DataEnv = "DIALOUT_DATA"
+
+// Config is dialout.yaml.
+type Config struct {
+	Owner       string   `yaml:"owner"`        // who the agent calls for, as said on the phone
+	Timezone    string   `yaml:"timezone"`     // for the date in the prompt; the machine's when empty
+	SecretsFile string   `yaml:"secrets_file"` // KEY=VALUE file loaded into the environment first
+	Twilio      Twilio   `yaml:"twilio"`
+	Engine      Engine   `yaml:"engine"`
+	Prompt      Prompt   `yaml:"prompt"`
+	Tunnel      Tunnel   `yaml:"tunnel"`
+	Storage     Storage  `yaml:"storage"`
+	Server      Server   `yaml:"server"`
+	Watchdog    Watchdog `yaml:"watchdog"`
+	Policy      Policy   `yaml:"policy"`
+	// Profiles are named engine choices a call can pick (agent-phone fork): hifi, standard,
+	// internal, or any name. A profile overrides the engine's settings for that call only.
+	Profiles map[string]Profile `yaml:"profiles"`
+	// Inbound answers calls to twilio.from with a standing brief (agent-phone fork).
+	Inbound Inbound `yaml:"inbound"`
+
+	Path     string         `yaml:"-"` // the file it was read from
+	Location *time.Location `yaml:"-"` // Timezone, loaded
+	Prompts  *prompts.Set   `yaml:"-"` // Prompt.File, loaded
+}
+
+// Inbound is how the install answers calls to its number. The number's voice webhook must point
+// at https://<tunnel.hostname>/twilio/voice, and the ingress must stand (no per-call tunnel).
+// A caller's number can be faked, so an inbound call grants no authority.
+type Inbound struct {
+	Enabled   bool   `yaml:"enabled"`
+	Engine    string `yaml:"engine"`    // a profile or engine name; the default engine when empty
+	Objective string `yaml:"objective"` // the standing brief: what the agent wants from a caller
+	Limits    string `yaml:"limits"`
+	Context   string `yaml:"context"`
+	// PerDay caps the calls answered in 24 hours; 0: no cap.
+	PerDay int `yaml:"per_day"`
+	// SpendShare: inbound calls are refused once the month's spend reaches this share of the limit,
+	// so callers can't use up the budget the owner's own calls need; 0.8 when 0 (agent-phone fork,
+	// from Dev's review).
+	SpendShare float64 `yaml:"spend_share"`
+	// NotifyURL gets a POST with the call's record (JSON) after every inbound call; optional.
+	NotifyURL   string `yaml:"notify_url"`
+	NotifyToken string `yaml:"notify_token"` // sent as a bearer token, when set
+}
+
+type Twilio struct {
+	AccountSID   string `yaml:"account_sid"`
+	APIKeySID    string `yaml:"api_key_sid"`
+	APIKeySecret string `yaml:"api_key_secret"`
+	AuthToken    string `yaml:"auth_token"` // only to check X-Twilio-Signature
+	From         string `yaml:"from"`       // caller ID: verified, or a number on the account
+	// USDPerMinute is the carrier's rate, for the spend estimate (agent-phone fork); 0.014 (Twilio
+	// US, verified 2026-08-10) when 0.
+	USDPerMinute float64 `yaml:"usd_per_minute"`
+}
+
+type Engine struct {
+	Name       string     `yaml:"name"`     // the default engine: sonic, elevenlabs, openai, grok or gemini
+	Language   string     `yaml:"language"` // the callee's language, for engines that transcribe separately
+	Sonic      Sonic      `yaml:"sonic"`
+	ElevenLabs ElevenLabs `yaml:"elevenlabs"`
+	OpenAI     OpenAI     `yaml:"openai"`
+	Grok       Grok       `yaml:"grok"`
+	Gemini     Gemini     `yaml:"gemini"`
+}
+
+// Engines are the engine names a call may choose (agent-phone fork: engine per call).
+var Engines = []string{"sonic", "elevenlabs", "openai", "grok", "gemini"}
+
+// Profile is one named engine choice: the engine plus the settings it overrides for a call.
+type Profile struct {
+	Engine      string `yaml:"engine"`
+	Voice       string `yaml:"voice"`        // the engine's voice (ElevenLabs: a voice id)
+	VoiceGender string `yaml:"voice_gender"` // female or male, for the prompt's grammar
+	Model       string `yaml:"model"`        // openai, grok, gemini: the model
+	AgentID     string `yaml:"agent_id"`     // elevenlabs: the agent
+	LLM         string `yaml:"llm"`          // elevenlabs: the agent's language model
+	Note        string `yaml:"note"`         // what the profile is for, shown by list_numbers
+	// USDPerMinute is the engine's rate for the spend estimate; the engine's built-in rate when 0.
+	USDPerMinute float64 `yaml:"usd_per_minute"`
+}
+
+// EngineRates are the engines' published per-minute rates in US dollars, for the spend estimate
+// (agent-phone fork). Read from the vendors' pricing pages on 2026-11-16: Gemini 3.8 Live about
+// $0.014-0.017 (the higher end here), Grok Voice 3.0 $0.08. Others: set usd_per_minute.
+var EngineRates = map[string]float64{"gemini": 0.017, "grok": 0.08}
+
+// DefaultCarrierRate is Twilio's US per-minute rate, verified 2026-08-10.
+const DefaultCarrierRate = 0.014
+
+// Rate is the per-minute engine rate of a profile or engine name for the spend estimate; false
+// when it isn't known.
+func (c *Config) Rate(name string) (float64, bool) {
+	if name == "" {
+		name = c.Engine.Name
+	}
+	engine := name
+	if p, ok := c.Profiles[name]; ok {
+		if p.USDPerMinute > 0 {
+			return p.USDPerMinute, true
+		}
+		engine = p.Engine
+	}
+	r, ok := EngineRates[engine]
+	return r, ok
+}
+
+// CarrierRate is the carrier's per-minute rate.
+func (c *Config) CarrierRate() float64 {
+	if c.Twilio.USDPerMinute > 0 {
+		return c.Twilio.USDPerMinute
+	}
+	return DefaultCarrierRate
+}
+
+// Resolve turns a profile or engine name into the engine settings for one call: a profile's
+// overrides applied to a copy, or the named engine as configured. Empty: the default engine.
+func (c *Config) Resolve(name string) (Engine, string, error) {
+	e := c.Engine
+	if name == "" {
+		name = e.Name
+	}
+	if p, ok := c.Profiles[name]; ok {
+		e.Name = p.Engine
+		switch p.Engine {
+		case "elevenlabs":
+			e.ElevenLabs.AgentID = or(p.AgentID, e.ElevenLabs.AgentID)
+			e.ElevenLabs.VoiceID = or(p.Voice, e.ElevenLabs.VoiceID)
+			e.ElevenLabs.VoiceGender = or(p.VoiceGender, e.ElevenLabs.VoiceGender)
+			e.ElevenLabs.LLM = or(p.LLM, e.ElevenLabs.LLM)
+		case "openai":
+			e.OpenAI.Model, e.OpenAI.Voice = or(p.Model, e.OpenAI.Model), or(p.Voice, e.OpenAI.Voice)
+			e.OpenAI.VoiceGender = or(p.VoiceGender, e.OpenAI.VoiceGender)
+		case "grok":
+			e.Grok.Model, e.Grok.Voice = or(p.Model, e.Grok.Model), or(p.Voice, e.Grok.Voice)
+			e.Grok.VoiceGender = or(p.VoiceGender, e.Grok.VoiceGender)
+		case "gemini":
+			e.Gemini.Model, e.Gemini.Voice = or(p.Model, e.Gemini.Model), or(p.Voice, e.Gemini.Voice)
+			e.Gemini.VoiceGender = or(p.VoiceGender, e.Gemini.VoiceGender)
+		case "sonic":
+			e.Sonic.Voice = or(p.Voice, e.Sonic.Voice)
+		}
+	} else {
+		e.Name = name
+	}
+	if errs := e.CheckEngine(e.Name); len(errs) > 0 {
+		return e, name, fmt.Errorf("%s: %w", name, errors.Join(errs...))
+	}
+	return e, name, nil
+}
+
+func or(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
+}
+
+// Grok is xAI's Grok Voice realtime API (OpenAI-Realtime-shaped).
+type Grok struct {
+	APIKey      string `yaml:"api_key"`
+	Model       string `yaml:"model"`
+	Voice       string `yaml:"voice"`
+	VoiceGender string `yaml:"voice_gender"` // only for a voice outside the built-in list
+	APIBase     string `yaml:"api_base"`
+}
+
+// Gemini is Google's Gemini Live API (BidiGenerateContent over WebSocket).
+type Gemini struct {
+	APIKey      string `yaml:"api_key"`
+	Model       string `yaml:"model"`
+	Voice       string `yaml:"voice"`
+	VoiceGender string `yaml:"voice_gender"` // only for a voice outside the built-in list
+	APIVersion  string `yaml:"api_version"`  // v1beta (default) or v1alpha
+	APIBase     string `yaml:"api_base"`
+}
+
+type Sonic struct {
+	Region string `yaml:"region"`
+	Voice  string `yaml:"voice"`
+}
+
+type ElevenLabs struct {
+	APIKey      string `yaml:"api_key"`
+	AgentID     string `yaml:"agent_id"`
+	VoiceID     string `yaml:"voice_id"`     // instead of the agent's voice
+	VoiceGender string `yaml:"voice_gender"` // the prompt's grammatical gender: female or male
+	LLM         string `yaml:"llm"`          // instead of the agent's model
+	APIBase     string `yaml:"api_base"`
+}
+
+type OpenAI struct {
+	APIKey      string `yaml:"api_key"`
+	Model       string `yaml:"model"`
+	Voice       string `yaml:"voice"`
+	VoiceGender string `yaml:"voice_gender"` // only for a voice outside the built-in list
+	APIBase     string `yaml:"api_base"`
+}
+
+type Prompt struct {
+	File string `yaml:"file"` // empty: the built-in prompt
+}
+
+type Tunnel struct {
+	Hostname string `yaml:"hostname"` // empty: a quick tunnel per call
+	// Standing: the hostname already reaches Listen and stays up (ngrok, a reverse proxy, an
+	// always-on cloudflared): no cloudflared per call and no token (agent-phone fork). Inbound
+	// calls need it.
+	Standing    bool   `yaml:"standing"`
+	Token       string `yaml:"token"`       // the named tunnel's token, with a hostname
+	Cloudflared string `yaml:"cloudflared"` // path; found in PATH when empty
+	Listen      string `yaml:"listen"`      // the stream endpoint the tunnel forwards to
+}
+
+type Storage struct {
+	Enabled        bool   `yaml:"enabled"`      // false: store nothing on disk, neither transcripts nor audio
+	RecordAudio    bool   `yaml:"record_audio"` // with Enabled, the transcript and meta.json are always kept
+	SegmentSeconds int    `yaml:"segment_seconds"`
+	Spool          string `yaml:"spool"`
+	Dir            string `yaml:"dir"`       // where finished calls go, unless S3Bucket
+	S3Bucket       string `yaml:"s3_bucket"` // upload under calls/ in this bucket instead
+	S3Region       string `yaml:"s3_region"` // the bucket's region; the AWS SDK's (AWS_REGION, profile) when empty
+	S3Prefix       string `yaml:"s3_prefix"` // a key prefix before calls/, e.g. dialout/
+	Index          string `yaml:"index"`     // the server's call history
+}
+
+type Server struct {
+	MCPListen string `yaml:"mcp_listen"` // MCP over HTTP
+	MCPToken  string `yaml:"mcp_token"`  // the bearer token every HTTP request must carry
+}
+
+// Watchdog is a safety net: every few transcript lines a classifier on OpenRouter's Decisions API
+// judges whether the agent reached a voicemail or an automated menu, or the callee is hostile,
+// and the call is hung up.
+type Watchdog struct {
+	Enabled    bool               `yaml:"enabled"`
+	BaseURL    string             `yaml:"base_url"`
+	APIKey     string             `yaml:"api_key"`
+	Model      string             `yaml:"model"`
+	Timeout    time.Duration      `yaml:"timeout"`     // a verdict later than this is dropped
+	CheckEvery int                `yaml:"check_every"` // transcript lines between checks (the first after two)
+	Thresholds WatchdogThresholds `yaml:"thresholds"`
+}
+
+type WatchdogThresholds struct {
+	HangUp float64 `yaml:"hang_up"` // voicemail_or_ivr or hostile
+}
+
+type Policy struct {
+	Source         string         `yaml:"source"` // file (the keys below); ssm is reserved
+	Enabled        bool           `yaml:"enabled"`
+	Mode           string         `yaml:"mode"`            // allowlist, or open: any dialable number
+	Countries      []string       `yaml:"countries"`       // ISO codes of the countries numbers may be in
+	DefaultCountry string         `yaml:"default_country"` // for numbers written without +; none: international form only
+	NumberTypes    []string       `yaml:"number_types"`    // fixed, mobile, toll_free
+	Blocklist      []string       `yaml:"blocklist"`       // numbers or prefixes never called
+	Hours          string         `yaml:"hours"`           // open mode, unlisted numbers: e.g. 09:00-21:00
+	Allowlist      []policy.Entry `yaml:"allowlist"`
+	Limits         Limits         `yaml:"limits"`
+
+	dialable  policy.Dialable // the keys above, checked
+	blocklist []string
+	hours     policy.Hours
+}
+
+type Limits struct {
+	RingSeconds  int `yaml:"ring_seconds"`
+	PerHour      int `yaml:"per_hour"`           // 0: no limit
+	PerDay       int `yaml:"per_day"`            // 0: no limit
+	PerNumberDay int `yaml:"per_number_per_day"` // open mode, unlisted numbers; 0: no limit
+	// SpendPerMonth is the dollar limit for a calendar month, estimated from talk minutes times
+	// the rates (agent-phone fork). It refuses new calls, in and out, and never cuts a live one.
+	// 0: no limit.
+	SpendPerMonth  float64 `yaml:"spend_per_month_usd"`
+	CalleeChars    int     `yaml:"callee_chars"`
+	OpeningChars   int     `yaml:"opening_chars"`
+	ObjectiveChars int     `yaml:"objective_chars"`
+	LimitsChars    int     `yaml:"limits_chars"`
+	ContextChars   int     `yaml:"context_chars"`
+}
+
+// MaxMinutes is the longest call, outbound or inbound: a fixed ceiling against runaway calls (hold
+// music, two agents that never hang up), not an install setting (agent-phone fork, 2026-11-18). An
+// engine whose session is shorter ends the call sooner: see the README's engine limits.
+const MaxMinutes = 120
+
+// defaults are the values of the keys a file leaves out.
+func defaults() Config {
+	return Config{
+		Engine: Engine{Name: "sonic", Language: "en", Sonic: Sonic{Region: "eu-north-1", Voice: "tiffany"},
+			ElevenLabs: ElevenLabs{VoiceGender: "female"}},
+		Tunnel:  Tunnel{Listen: "127.0.0.1:8090"},
+		Storage: Storage{Enabled: true, SegmentSeconds: 60},
+		Server:  Server{MCPListen: ":8080"},
+		Inbound: Inbound{PerDay: 20},
+		Watchdog: Watchdog{BaseURL: "https://openrouter.ai/api", Model: "openai/gpt-6-luna-decisions", Timeout: 3 * time.Second,
+			CheckEvery: 4, Thresholds: WatchdogThresholds{HangUp: 0.9}},
+		Policy: Policy{Source: "file", Mode: string(policy.ModeAllowlist), Countries: []string{"GB", "US", "IT"},
+			NumberTypes: []string{"fixed", "mobile"}, Hours: "09:00-21:00", Limits: Limits{
+				RingSeconds: 25, PerHour: 6, PerDay: 20, PerNumberDay: 2,
+				CalleeChars: 100, OpeningChars: 300, ObjectiveChars: 500, LimitsChars: 500, ContextChars: 2000,
+			}},
+	}
+}
+
+// Find returns the configuration file to read: path when given, else $DIALOUT_CONFIG, else
+// dialout/dialout.yaml in the user's configuration folder, else /etc/dialout/dialout.yaml.
+func Find(path string) (string, error) {
+	if path != "" {
+		return path, nil
+	}
+	if p := os.Getenv(Env); p != "" {
+		return p, nil
+	}
+	var tried []string
+	if dir, err := os.UserConfigDir(); err == nil {
+		tried = append(tried, filepath.Join(dir, "dialout", "dialout.yaml"))
+	}
+	tried = append(tried, "/etc/dialout/dialout.yaml")
+	for _, p := range tried {
+		if _, err := os.Stat(p); err == nil {
+			return p, nil
+		}
+	}
+	return "", fmt.Errorf("no configuration file: pass -config, set %s, or create %s", Env, strings.Join(tried, " or "))
+}
+
+// Load reads, expands and checks a configuration file. Relative paths in it are relative to its
+// folder.
+func Load(path string) (*Config, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("config: %w", err)
+	}
+	c, err := Parse(b, filepath.Dir(path))
+	if err != nil {
+		return nil, fmt.Errorf("config %s: %w", path, err)
+	}
+	c.Path = path
+	return c, nil
+}
+
+// Parse decodes and checks a configuration; dir is the folder relative paths start from.
+func Parse(data []byte, dir string) (*Config, error) {
+	c := defaults()
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	if err := dec.Decode(&c); err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil, errors.New("the file is empty")
+		}
+		return nil, err
+	}
+	var extra any
+	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
+		return nil, errors.New("more than one YAML document")
+	}
+
+	rel := func(p *string) {
+		if *p != "" && !filepath.IsAbs(*p) && !strings.HasPrefix(*p, "/") && !strings.HasPrefix(*p, `\`) {
+			*p = filepath.Join(dir, *p)
+		}
+	}
+	rel(&c.SecretsFile)
+	if c.SecretsFile != "" {
+		if err := LoadEnvFile(c.SecretsFile); err != nil {
+			return nil, fmt.Errorf("secrets_file: %w", err)
+		}
+	}
+	unset := expand(reflect.ValueOf(&c).Elem(), "")
+
+	base := os.Getenv(DataEnv)
+	if base == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			home = "."
+		}
+		base = filepath.Join(home, ".dialout")
+	}
+	for _, d := range []struct {
+		p   *string
+		def string
+	}{
+		{&c.Storage.Spool, filepath.Join(base, "spool")},
+		{&c.Storage.Dir, filepath.Join(base, "calls")},
+		{&c.Storage.Index, filepath.Join(base, "calls.json")},
+	} {
+		if *d.p == "" {
+			*d.p = d.def
+		} else {
+			rel(d.p)
+		}
+	}
+	rel(&c.Prompt.File)
+	rel(&c.Tunnel.Cloudflared)
+
+	if err := c.check(unset); err != nil {
+		return nil, err
+	}
+	var err error
+	if c.Location, err = loadLocation(c.Timezone); err != nil {
+		return nil, err
+	}
+	if c.Prompts, err = prompts.Load(c.Prompt.File); err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+func loadLocation(name string) (*time.Location, error) {
+	if name == "" {
+		return time.Local, nil
+	}
+	loc, err := time.LoadLocation(name)
+	if err != nil {
+		return nil, fmt.Errorf("timezone: %w", err)
+	}
+	return loc, nil
+}
+
+// check validates the settings every command needs. unset maps a key to the variables it
+// referenced that weren't set, for the error messages.
+func (c *Config) check(unset map[string][]string) error {
+	var errs []error
+	need := func(key, v string) {
+		if strings.TrimSpace(v) == "" {
+			msg := key + " is empty"
+			if vars := unset[key]; len(vars) > 0 {
+				msg += " (" + strings.Join(vars, ", ") + " not set)"
+			}
+			errs = append(errs, errors.New(msg))
+		}
+	}
+	oneOf := func(key, v string, allowed ...string) {
+		if !slices.Contains(allowed, v) {
+			errs = append(errs, fmt.Errorf("%s: %q isn't one of %s", key, v, strings.Join(allowed, ", ")))
+		}
+	}
+
+	if err := prompts.ValidOwner(c.Owner); err != nil {
+		errs = append(errs, fmt.Errorf("owner: %w", err))
+	}
+	need("twilio.account_sid", c.Twilio.AccountSID)
+	need("twilio.api_key_sid", c.Twilio.APIKeySID)
+	need("twilio.api_key_secret", c.Twilio.APIKeySecret)
+	need("twilio.auth_token", c.Twilio.AuthToken)
+	need("twilio.from", c.Twilio.From)
+
+	oneOf("engine.name", c.Engine.Name, Engines...)
+	need("engine.language", c.Engine.Language)
+	errs = append(errs, c.Engine.CheckEngine(c.Engine.Name)...)
+
+	if c.Tunnel.Standing {
+		need("tunnel.hostname", c.Tunnel.Hostname)
+	} else if c.Tunnel.Hostname != "" {
+		need("tunnel.token", c.Tunnel.Token)
+	}
+	need("tunnel.listen", c.Tunnel.Listen)
+
+	if !c.Storage.Enabled && c.Storage.RecordAudio {
+		errs = append(errs, errors.New("storage.record_audio needs storage.enabled"))
+	}
+	if c.Storage.SegmentSeconds < 1 {
+		errs = append(errs, errors.New("storage.segment_seconds must be at least 1"))
+	}
+	if c.Storage.S3Bucket == "" && (c.Storage.S3Region != "" || c.Storage.S3Prefix != "") {
+		errs = append(errs, errors.New("storage.s3_region and storage.s3_prefix need storage.s3_bucket"))
+	}
+	if p := c.Storage.S3Prefix; p != "" {
+		if strings.HasPrefix(p, "/") || strings.Contains(p, "..") || strings.ContainsAny(p, `\ `) {
+			errs = append(errs, fmt.Errorf("storage.s3_prefix: %q must be relative, without .., \\ or spaces", p))
+		} else if !strings.HasSuffix(p, "/") {
+			c.Storage.S3Prefix += "/"
+		}
+	}
+
+	need("server.mcp_listen", c.Server.MCPListen)
+
+	if c.Policy.Limits.SpendPerMonth < 0 {
+		errs = append(errs, errors.New("policy.limits.spend_per_month_usd can't be negative"))
+	}
+	if c.Policy.Limits.SpendPerMonth > 0 {
+		names := []string{c.Engine.Name}
+		for n := range c.Profiles {
+			names = append(names, n)
+		}
+		if c.Inbound.Engine != "" {
+			names = append(names, c.Inbound.Engine)
+		}
+		for _, n := range names {
+			if _, ok := c.Rate(n); !ok {
+				errs = append(errs, fmt.Errorf("policy.limits.spend_per_month_usd: no rate for %q: set its usd_per_minute in a profile", n))
+			}
+		}
+	}
+
+	if in := c.Inbound; in.Enabled {
+		need("inbound.objective", in.Objective)
+		if in.Engine != "" {
+			if _, _, err := c.Resolve(in.Engine); err != nil {
+				errs = append(errs, fmt.Errorf("inbound.engine: %w", err))
+			}
+		}
+		if in.NotifyURL != "" && !strings.HasPrefix(in.NotifyURL, "https://") && !strings.HasPrefix(in.NotifyURL, "http://127.0.0.1") && !strings.HasPrefix(in.NotifyURL, "http://localhost") {
+			errs = append(errs, errors.New("inbound.notify_url must be https, or http on localhost"))
+		}
+	}
+
+	if w := c.Watchdog; w.Enabled {
+		need("watchdog.api_key", w.APIKey)
+		need("watchdog.base_url", w.BaseURL)
+		need("watchdog.model", w.Model)
+		if w.Timeout <= 0 || w.Timeout > 30*time.Second {
+			errs = append(errs, errors.New("watchdog.timeout must be between 0 and 30s"))
+		}
+		if w.CheckEvery < 1 || w.CheckEvery > 20 {
+			errs = append(errs, errors.New("watchdog.check_every must be between 1 and 20"))
+		}
+		if v := w.Thresholds.HangUp; v <= 0 || v > 1 {
+			errs = append(errs, errors.New("watchdog.thresholds.hang_up must be above 0 and at most 1"))
+		}
+	}
+
+	if c.Policy.Source != "file" {
+		errs = append(errs, fmt.Errorf("policy.source: %q isn't supported; use file", c.Policy.Source))
+	}
+	oneOf("policy.mode", c.Policy.Mode, string(policy.ModeAllowlist), string(policy.ModeOpen))
+	if err := c.Policy.compile(); err != nil {
+		errs = append(errs, err)
+	} else if al, err := policy.ValidateAllowlist(c.Policy.Allowlist, c.Policy.dialable); err != nil {
+		errs = append(errs, fmt.Errorf("policy.allowlist: %w", err))
+	} else {
+		c.Policy.Allowlist = al
+	}
+	l := c.Policy.Limits
+	switch {
+	case l.RingSeconds < 5 || l.RingSeconds > 120:
+		errs = append(errs, errors.New("policy.limits.ring_seconds must be between 5 and 120"))
+	case l.PerHour < 0 || l.PerDay < 0 || l.PerNumberDay < 0:
+		errs = append(errs, errors.New("policy.limits.per_hour, per_day and per_number_per_day can't be negative"))
+	case l.CalleeChars < 1 || l.OpeningChars < 1 || l.ObjectiveChars < 1 || l.LimitsChars < 1 || l.ContextChars < 1:
+		errs = append(errs, errors.New("policy.limits: every size limit must be at least 1"))
+	}
+	return errors.Join(errs...)
+}
+
+// Check validates the configuration again, after a command changed it (e.g. -engine).
+func (c *Config) Check() error { return c.check(nil) }
+
+// CheckServer validates what the MCP server over HTTP needs on top: a token long enough.
+func (c *Config) CheckServer() error {
+	if len(c.Server.MCPToken) < 32 {
+		return errors.New("server.mcp_token must be at least 32 characters (e.g. openssl rand -hex 32)")
+	}
+	return nil
+}
+
+// PolicyConfig is the policy in force.
+func (c *Config) PolicyConfig() policy.Config {
+	l := c.Policy.Limits
+	return policy.Config{
+		Enabled: c.Policy.Enabled, Mode: policy.Mode(c.Policy.Mode), Dialable: c.Policy.dialable,
+		Allowlist: c.Policy.Allowlist, Blocklist: c.Policy.blocklist, Hours: c.Policy.hours, Location: c.Location,
+		MaxPerNumberPerDay: l.PerNumberDay, MaxPerHour: l.PerHour, MaxPerDay: l.PerDay,
+		MaxCallee: l.CalleeChars, MaxOpening: l.OpeningChars,
+		MaxObjective: l.ObjectiveChars, MaxContext: l.ContextChars, MaxLimits: l.LimitsChars,
+		MaxCallSeconds: MaxMinutes * 60,
+	}
+}
+
+// compile checks the countries, number types, blocklist and hours, and keeps them in the form
+// the policy uses.
+func (p *Policy) compile() error {
+	var errs []error
+	if len(p.Countries) == 0 {
+		errs = append(errs, errors.New("policy.countries is empty"))
+	}
+	var countries []string
+	for _, c := range p.Countries {
+		c = strings.ToUpper(strings.TrimSpace(c))
+		if !policy.ValidCountry(c) {
+			errs = append(errs, fmt.Errorf("policy.countries: %q isn't an ISO country code", c))
+		}
+		countries = append(countries, c)
+	}
+	def := strings.ToUpper(strings.TrimSpace(p.DefaultCountry))
+	if def != "" && !policy.ValidCountry(def) {
+		errs = append(errs, fmt.Errorf("policy.default_country: %q isn't an ISO country code", def))
+	}
+	if len(p.NumberTypes) == 0 {
+		errs = append(errs, errors.New("policy.number_types is empty"))
+	}
+	var kinds []policy.Kind
+	for _, t := range p.NumberTypes {
+		k := policy.Kind(strings.TrimSpace(t))
+		if !slices.Contains(policy.AllowableKinds, k) {
+			errs = append(errs, fmt.Errorf("policy.number_types: %q isn't one of fixed, mobile, toll_free", t))
+		}
+		kinds = append(kinds, k)
+	}
+	p.dialable = policy.Dialable{Countries: countries, DefaultCountry: def, Kinds: kinds}
+	p.blocklist = nil
+	for _, b := range p.Blocklist {
+		n, err := policy.NormalizeBlock(b)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("policy.blocklist: %w", err))
+		}
+		p.blocklist = append(p.blocklist, n)
+	}
+	var err error
+	if p.hours, err = policy.ParseHours(p.Hours); err != nil {
+		errs = append(errs, fmt.Errorf("policy.%w", err))
+	}
+	return errors.Join(errs...)
+}
+
+// expand replaces ${VAR} with the variable's value in every string of v, after decoding, so a
+// secret containing # or ": " can't break the YAML. $$ is a literal $. It returns, by key, the
+// variables referenced but not set: they expand to nothing.
+func expand(v reflect.Value, key string) map[string][]string {
+	unset := map[string][]string{}
+	var walk func(v reflect.Value, key string)
+	walk = func(v reflect.Value, key string) {
+		switch v.Kind() {
+		case reflect.String:
+			s, missing := expandString(v.String())
+			v.SetString(s)
+			if len(missing) > 0 {
+				unset[key] = missing
+			}
+		case reflect.Struct:
+			t := v.Type()
+			for i := range t.NumField() {
+				f := t.Field(i)
+				name, _, _ := strings.Cut(f.Tag.Get("yaml"), ",")
+				if name == "-" || !f.IsExported() {
+					continue
+				}
+				if name == "" {
+					name = strings.ToLower(f.Name)
+				}
+				k := name
+				if key != "" {
+					k = key + "." + name
+				}
+				walk(v.Field(i), k)
+			}
+		case reflect.Slice:
+			for i := range v.Len() {
+				walk(v.Index(i), fmt.Sprintf("%s[%d]", key, i))
+			}
+		}
+	}
+	walk(v, key)
+	return unset
+}
+
+func expandString(s string) (string, []string) {
+	if !strings.Contains(s, "$") {
+		return s, nil
+	}
+	var b strings.Builder
+	var missing []string
+	for i := 0; i < len(s); i++ {
+		switch {
+		case s[i] != '$' || i+1 == len(s):
+			b.WriteByte(s[i])
+		case s[i+1] == '$':
+			b.WriteByte('$')
+			i++
+		case s[i+1] == '{':
+			end := strings.IndexByte(s[i+2:], '}')
+			name := ""
+			if end >= 0 {
+				name = s[i+2 : i+2+end]
+			}
+			if !validName(name) {
+				b.WriteByte(s[i])
+				continue
+			}
+			v, ok := os.LookupEnv(name)
+			if !ok || v == "" {
+				missing = append(missing, name)
+			}
+			b.WriteString(v)
+			i += 2 + end
+		default:
+			b.WriteByte(s[i])
+		}
+	}
+	return b.String(), missing
+}
+
+func validName(n string) bool {
+	if n == "" {
+		return false
+	}
+	for i, r := range n {
+		if !(r == '_' || r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' || i > 0 && r >= '0' && r <= '9') {
+			return false
+		}
+	}
+	return true
+}
+
+// CheckEngine lists what a call on the named engine is missing: its key and settings. The
+// default engine is checked at load; an engine chosen per call is checked before it is placed.
+func (e Engine) CheckEngine(name string) []error {
+	var errs []error
+	need := func(key, v string) {
+		if strings.TrimSpace(v) == "" {
+			errs = append(errs, errors.New(key+" is empty"))
+		}
+	}
+	gender := func(key, v string, allowed ...string) {
+		if !slices.Contains(allowed, v) {
+			errs = append(errs, fmt.Errorf("%s: %q isn't one of %s", key, v, strings.Join(allowed, ", ")))
+		}
+	}
+	switch name {
+	case "sonic":
+		need("engine.sonic.region", e.Sonic.Region)
+	case "elevenlabs":
+		need("engine.elevenlabs.api_key", e.ElevenLabs.APIKey)
+		need("engine.elevenlabs.agent_id", e.ElevenLabs.AgentID)
+		gender("engine.elevenlabs.voice_gender", e.ElevenLabs.VoiceGender, "female", "male")
+	case "openai":
+		need("engine.openai.api_key", e.OpenAI.APIKey)
+		gender("engine.openai.voice_gender", e.OpenAI.VoiceGender, "", "female", "male")
+	case "grok":
+		need("engine.grok.api_key", e.Grok.APIKey)
+		gender("engine.grok.voice_gender", e.Grok.VoiceGender, "", "female", "male")
+	case "gemini":
+		need("engine.gemini.api_key", e.Gemini.APIKey)
+		gender("engine.gemini.voice_gender", e.Gemini.VoiceGender, "", "female", "male")
+		gender("engine.gemini.api_version", e.Gemini.APIVersion, "", "v1beta", "v1alpha")
+	default:
+		errs = append(errs, fmt.Errorf("engine %q isn't one of %s", name, strings.Join(Engines, ", ")))
+	}
+	return errs
+}

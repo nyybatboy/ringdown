@@ -1,0 +1,72 @@
+# agent-phone: a dialout.yaml for one install of the fork. Gemini 3.8 Live and Grok Voice 3.0 as
+# named profiles, a standing ngrok domain as the ingress, inbound calls answered with a standing
+# brief, and a monthly dollar limit. Secrets come from secrets.env (see secrets.env.example) or
+# the environment. Every other key keeps dialout's default: dialout.example.yaml lists them all.
+
+owner: Sam                         # who the agent calls for, as said on the phone
+timezone: America/New_York
+secrets_file: secrets.env
+
+twilio:
+  account_sid: ${TWILIO_ACCOUNT_SID}
+  api_key_sid: ${TWILIO_API_KEY_SID}
+  api_key_secret: ${TWILIO_API_KEY_SECRET}
+  auth_token: ${TWILIO_AUTH_TOKEN}  # checks Twilio's signature on the stream and the voice webhook
+  from: "+1 475 555 0100"           # this install's number
+
+# The default engine, and the keys every profile below shares.
+engine:
+  name: gemini
+  language: en
+  gemini:
+    api_key: ${GEMINI_API_KEY}
+    voice: Achird
+  grok:
+    api_key: ${XAI_API_KEY}
+    voice: atlas
+
+# A call names a profile (place_call engine: hifi); none means engine.name above.
+profiles:
+  hifi:     {engine: gemini, voice: Achird, note: "Gemini 3.8 Live, Achird"}
+  standard: {engine: grok, voice: atlas, note: "Grok Voice 3.0, atlas"}
+  internal: {engine: gemini, voice: Zubenelgenubi, note: "Gemini 3.8 Live, Zubenelgenubi; lowest cost"}
+
+# A standing ingress: the hostname reaches tunnel.listen all the time.
+# On a server with a public address: no tunnel. deploy/line/install-line.sh runs Caddy on the
+# box and the hostname is the server's own (see docs/install.md, "On a server").
+# On a laptop, with ngrok's free dev domain: ngrok http 8090 --url <your-domain>.ngrok-free.dev
+tunnel:
+  hostname: your-domain.ngrok-free.dev
+  standing: true
+  listen: 127.0.0.1:8090
+
+# Calls to this install's number. Point the number at it once: dialout number -point
+inbound:
+  enabled: true
+  engine: internal
+  objective: "Find out who's calling and what they need, and take a message for Sam: their name, what it's about, and how to reach them."
+  # notify_url: https://agent.example.com/phone-inbox   # POSTed the call's record after each call
+  # notify_token: ${INBOX_NOTIFY_TOKEN}
+
+server:
+  mcp_token: ${DIALOUT_MCP_TOKEN}
+
+storage:
+  enabled: true        # transcripts and meta.json under $DIALOUT_DATA (~/.dialout)
+  record_audio: false  # the audio too; check the recording laws where you and the callee are
+
+policy:
+  enabled: true        # the external on/off switch: false refuses every outbound call
+  mode: allowlist      # only the numbers below; open: any number of the countries and types
+  countries: [US]
+  number_types: [fixed, mobile]
+  allowlist:
+    - {number: "+1 212 555 0123", label: Alex, name: Alex, kind: personal}
+    - {number: "+1 475 555 0100", label: Self, name: this install, kind: business}  # for dialout check and dialout smoke
+  hours: ""            # open mode only; empty: any time
+  limits:
+    ring_seconds: 30
+    per_hour: 0        # 0: no limit
+    per_day: 0
+    per_number_per_day: 0
+    spend_per_month_usd: 20  # estimated from talk minutes x rates; refuses new calls, never cuts one

@@ -1,0 +1,9 @@
+# Phone ingress. One site file per line in sites/; reload without dropping calls:
+#   docker exec phone-ingress caddy reload --config /etc/caddy/Caddyfile --address unix//run/admin.sock
+{
+	admin unix//run/admin.sock
+	servers {
+		protocols h1 h2
+	}
+}
+import sites/*.caddy

@@ -1,0 +1,32 @@
+# One phone line (dialout serve) on a box that runs the phone ingress (deploy/ingress).
+#   MCP:    <container>:8080 on the line's own network, behind the bearer token. The agent's
+#           container joins that network; nothing else can reach it. Not published on the host.
+#   Twilio: the stream port, published on HOST LOOPBACK only (127.0.0.1:LINE_PORT). The ingress
+#           forwards https://LINE_HOSTNAME/twilio/* to it. Twilio's signature guards both paths.
+# Values come from deploy/lines/<line>/line.env through install-line.sh.
+name: ${LINE_PROJECT}
+services:
+  agent-phone:
+    image: agent-phone:${AGENT_PHONE_TAG}
+    container_name: ${LINE_CONTAINER}
+    restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 200m
+    cpus: "0.5"
+    pids_limit: 128
+    tmpfs: [/tmp]
+    env_file: ["${LINE_SECRETS}"]
+    environment: ["TZ=${LINE_TZ:-UTC}"]
+    volumes:
+      - ${LINE_DIR}/config:/config:ro
+      - ${LINE_DIR}/data:/data
+    ports: ["127.0.0.1:${LINE_PORT}:8090"]
+    networks: [mcp]
+    logging: {driver: json-file, options: {max-size: "10m", max-file: "3"}}
+networks:
+  mcp:
+    name: ${LINE_NET}
+    external: true   # made by install-line.sh, so the agent's own compose can name it too
